@@ -35,19 +35,18 @@ contract Remittance is Ownable, Pausable {
         uint amount
     );
 
-    event WithDraw(
-        address indexed broker,
+    event RemittanceFundsReleased(
         bytes32 hash,
+        address indexed broker,
         uint amount
     );
 
-    function checkStringIsNotEmpty (string memory str) internal pure {
-        require(
-            bytes(str).length > 0,
-            "The hash cannot be empty"
-        );
-    }
+    event WithDraw(
+        address indexed withdrawer,
+        uint amount
+    );
 
+    // Generic deposit function
     function deposit() external payable whenNotPaused {
         require(msg.value > 0, "The value must be greater than 0");
         balances[msg.sender] = balances[msg.sender].add(msg.value);
@@ -55,19 +54,19 @@ contract Remittance is Ownable, Pausable {
         emit Deposit(msg.sender, msg.value);
     }
 
-    function create(bytes32 hash, address broker, address recipient, uint256 amount) external whenNotPaused returns(bool success) {
-        require(hash.length > 0, "The hash cannot be empty");
-        uint256 funderBalance = balances[msg.sender];
-        require(funderBalance >= amount, "There are insufficient funds in the sender's account to create this contract");
+    // The funder can create a remittance contract
+    function create(bytes32 hash, address broker, address recipient, uint256 amount)
+        external
+        whenNotPaused
+        returns(bool success)
+    {
 
-        require(broker == address(broker) && broker != address(0), "Invalid broker address");
-        require(recipient == address(recipient) && recipient != address(0), "Invalid recipient address");
-        require(broker != recipient, "The broker and recipient addresses must be different");
+        require(broker != recipient, "The broker is the same as the recipient");
+        require(broker != msg.sender && recipient != msg.sender, "The caller cannot be the broker or recipient");
         require(amount > 0, "The amount must be greater than 0");
-        require(hash.length > 0, "The hash cannot be empty");
 
-        balances[msg.sender] = funderBalance.sub(amount);
-        balances[broker] =  balances[broker].add(amount);
+        uint256 funderBalance = balances[msg.sender];
+        require(funderBalance >= amount, "There are insufficient funds in the funder's account to create this remittance contract");
 
         RemittanceContract storage remittanceContract = contracts[hash];
 
@@ -79,34 +78,52 @@ contract Remittance is Ownable, Pausable {
 
         emit RemittanceContractCreated(hash, msg.sender, broker, recipient, amount);
 
-        return success;
+        return true;
     }
 
+    // The broker takes concatenates their password with the recipient's password to release the funds
+    function release(string memory concatenatedPassword) public whenNotPaused returns(bool) {
 
-    function withdraw(string memory concatenatedPassword) public whenNotPaused returns(bool success) {
         require(bytes(concatenatedPassword).length > 0, "The concatenated password cannot be empty");
         bytes32 hash = keccak256(abi.encodePacked(concatenatedPassword));
 
+        //Retrieve remittance contract
         RemittanceContract storage remittanceContract = contracts[hash];
-
         uint amount = remittanceContract.amount;
         address funder = remittanceContract.funder;
+        address broker = remittanceContract.broker;
 
-        uint256 withdrawerBalance = balances[msg.sender];
-        require(withdrawerBalance >= amount, "There are insufficient funds available in the withdrawer's contract balance");
+        require(msg.sender == broker, "Only the broker can release funds for this remittance");
 
         uint256 funderBalance = balances[funder];
-        require(funderBalance >= amount, "There are insufficient funds available in the funder's contract balance");
+        uint256 brokerBalance = balances[broker];
 
-        balances[msg.sender] = SafeMath.sub(withdrawerBalance, amount);
+        // Subtract from Funder balance
+        require(funderBalance >= amount, "There are insufficient funds available in the funder's contract balance");
+        balances[funder] = SafeMath.sub(funderBalance, amount);
+
+        // Add to Broker balance
+        balances[broker] = brokerBalance.add(amount);
+
         remittanceContract.fundsReleased = true;
 
-        emit WithDraw(msg.sender, hash, amount);
+        emit RemittanceFundsReleased(hash, msg.sender, amount);
 
+        return true;
+    }
+
+    // Generic withdraw function
+    function withdraw(uint amount) public whenNotPaused returns(bool success) {
+
+        uint256 withdrawerBalance = balances[msg.sender];
+        require(amount > 0, "The value must be greater than 0");
+        require(withdrawerBalance >= amount, "There are insufficient funds");
+
+        balances[msg.sender] = SafeMath.sub(withdrawerBalance, amount);
+        emit WithDraw(msg.sender, amount);
         (success, ) = msg.sender.call{value: amount}("");
         require(success, "Transfer failed");
     }
-
 
     function pause() public onlyOwner {
         super._pause();

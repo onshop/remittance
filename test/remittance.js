@@ -5,6 +5,7 @@ contract('Remittance', async accounts => {
 
     const { toBN } = web3.utils;
     const concatPassword = "password1" + "password2";
+    const hash = await web3.utils.soliditySha3(concatPassword);
 
     const getGasCost = async txObj => {
         const tx = await web3.eth.getTransaction(txObj.tx);
@@ -12,42 +13,53 @@ contract('Remittance', async accounts => {
         return toBN(txObj.receipt.gasUsed).mul(toBN(tx.gasPrice));
     };
 
+    const checkEventNotEmitted = async () => {
+        const result = await truffleAssert.createTransactionResult(remittance, remittance.transactionHash);
+
+        await truffleAssert.eventNotEmitted(
+            result
+        );
+    };
+
     const [funder, broker, recipient] = accounts;
     let remittance;
-``
+
     beforeEach("Deploy and prepare", async function() {
         remittance = await Remittance.new({from: funder});
     });
 
-    it('Sender can deposit 5 wei into the broker account', async () => {
-        const txObj = await remittance.deposit({from: funder, value: 5});
+    it("Funder can deposit 5 wei into their account", async () => {
+
+        const depositAmount = "5"
+        const txObj = await remittance.deposit({from: funder, value: depositAmount});
+
+        // Check contract's changed ETH balance contains 5 wei
+        const contractEthBalance = toBN(await web3.eth.getBalance(remittance.address));
+        assert.strictEqual(contractEthBalance.toString(10), depositAmount);
+
+        // Check funder's contract balance is topped up with 5 wei
+        const funderOwed = await remittance.balances(funder);
+        assert.strictEqual(funderOwed.toString(10), depositAmount);
 
         truffleAssert.eventEmitted(txObj, 'Deposit', (ev) => {
             return  ev.depositor === funder &&
-                ev.amount.toString(10) === "5";
-        }, 'Deposit event is emitted');
+                    ev.amount.toString(10) === depositAmount;
+        }, 'Deposit event is emitted')
 
-        // Check contract's changed ETH balance
-        const contractEthBalance = toBN(await web3.eth.getBalance(remittance.address));
-        assert.strictEqual(contractEthBalance.toString(10), "5");
     });
 
-    it('RemittanceContract is created', async () => {
+    it("Funder creates a remittance", async () => {
 
-        await remittance.deposit({from: funder, value: toBN(5)});
-        const hash = await web3.utils.soliditySha3(concatPassword);
-        const txObj = await remittance.create(hash, broker, recipient, toBN(2), {from: funder});
-
-        // Check broker's changed contract balance
-        const brokerContractBalance = await remittance.balances(broker);
-        assert.strictEqual(brokerContractBalance.toString(10), "2");
+        const remittanceAmount = "2";
+        await remittance.deposit({from: funder, value: 5});
+        const txObj = await remittance.create(hash, broker, recipient, remittanceAmount, {from: funder});
 
         truffleAssert.eventEmitted(txObj, 'RemittanceContractCreated', (ev) => {
             return  ev.hash === hash &&
-                ev.funder === funder &&
-                ev.broker === broker &&
-                ev.recipient === recipient &&
-                ev.amount.toString(10) === "2";
+                    ev.funder === funder &&
+                    ev.broker === broker &&
+                    ev.recipient === recipient &&
+                    ev.amount.toString(10) === remittanceAmount;
         }, 'RemittanceContractCreated event is emitted');
 
         const remittanceContract = await remittance.contracts(hash);
@@ -55,37 +67,269 @@ contract('Remittance', async accounts => {
         assert.strictEqual(remittanceContract.funder, funder);
         assert.strictEqual(remittanceContract.broker, broker);
         assert.strictEqual(remittanceContract.recipient, recipient);
-        assert.strictEqual(remittanceContract.amount.toString(10), "2");
+        assert.strictEqual(remittanceContract.amount.toString(10), remittanceAmount);
         assert.strictEqual(remittanceContract.fundsReleased, false);
     });
 
-    it('Broker withdraws eth on behalf of the recipient', async () => {
+    it("Broker releases funds from the funder's balance to their balance", async () => {
 
+        const remittanceAmount = "2";
+        await remittance.deposit({from: funder, value: 5});
+        await remittance.create(hash, broker, recipient, remittanceAmount, {from: funder});
+
+        const txObj = await remittance.release(concatPassword, {from: broker});
+
+        truffleAssert.eventEmitted(txObj, 'RemittanceFundsReleased', (ev) => {
+            return  ev.hash === hash &&
+                    ev.broker === broker &&
+                    ev.amount.toString(10) === remittanceAmount;
+        }, 'RemittanceFundsReleased event is emitted');
+
+        // Check funder's changed contract balance is now reduced from 5 to 3 wei
+        const funderOwed = await remittance.balances(funder);
+        assert.strictEqual(funderOwed.toString(10), "3");
+
+        // Check broker's changed contract balance now contains 2 wei
+        const brokerOwed = await remittance.balances(broker);
+        assert.strictEqual(brokerOwed.toString(10), remittanceAmount);
+
+        // Check funds released is set to true
+        const remittanceContract = await remittance.contracts(hash);
+        assert.strictEqual(remittanceContract.fundsReleased, true);
+
+    });
+
+    it('Broker withdraws remittance after releasing funds into their balance', async () => {
+
+        const withDrawAmount = toBN(2);
+        await remittance.deposit({from: funder, value: 5});
+        await remittance.create(hash, broker, recipient, withDrawAmount, {from: funder});
+        await remittance.release(concatPassword, {from: broker});
+
+        const initContractEthBalance = toBN(await web3.eth.getBalance(remittance.address));
         const initBrokerEthBalance = toBN(await web3.eth.getBalance(broker));
-        await remittance.deposit({from: funder, value: toBN(5)});
-        const hash = await web3.utils.soliditySha3(concatPassword);
-        await remittance.create(hash, broker, recipient, toBN(2), {from: funder});
 
-        const txObj = await remittance.withdraw(concatPassword, {from: broker});
-
-        truffleAssert.eventEmitted(txObj, 'WithDraw', (ev) => {
-            return  ev.broker === broker &&
-                ev.hash === hash &&
-                ev.amount.toString(10) === "2";
-        }, 'WithDraw event is emitted');
-
-        // Check broker's changed contract balance
-        const brokerContractBalance = await remittance.balances(broker);
-        assert.strictEqual(brokerContractBalance.toString(10), "0");
+        const txObj = await remittance.withdraw(withDrawAmount, {from: broker});
 
         // Check broker's new Ether balance
         const cost = toBN(await getGasCost(txObj));
         const brokerEthBalance = toBN(await web3.eth.getBalance(broker));
-        const expectedBrokerEthBalance = initBrokerEthBalance.sub(cost).add(toBN(2)).toString(10);
+        const expectedBrokerEthBalance = initBrokerEthBalance.sub(cost).add(withDrawAmount).toString(10);
         assert.strictEqual(brokerEthBalance.toString(10), expectedBrokerEthBalance);
 
-        // Check funds released
-        const remittanceContract = await remittance.contracts(hash);
-        assert.strictEqual(remittanceContract.fundsReleased, true);
+        // Check contract's new Ether balance
+        const contractEthBalance = toBN(await web3.eth.getBalance(remittance.address));
+        const expectedContractEthBalance = initContractEthBalance.sub(withDrawAmount).toString(10);
+        assert.strictEqual(contractEthBalance.toString(10), expectedContractEthBalance);
+
+        truffleAssert.eventEmitted(txObj, 'WithDraw', (ev) => {
+            return  ev.withdrawer === broker &&
+                    ev.amount.toString(10) === withDrawAmount.toString(10);
+        }, 'WithDraw event is emitted');
     });
+
+    it("Deposit reverts if the deposit amount is zero", async () => {
+        await truffleAssert.reverts(
+            remittance.deposit({from: funder, value: 0}),
+            "The value must be greater than 0"
+        );
+        checkEventNotEmitted();
+    });
+
+    it("Creating a contract reverts if the first broker is the same as the recipient", async () => {
+        await truffleAssert.reverts(
+            remittance.create(hash, broker, broker, toBN(2), {from: funder}),
+            "The broker is the same as the recipient"
+        );
+        checkEventNotEmitted();
+    });
+
+    it("Creating a contract reverts if the caller is the same as the broker or recipient", async () => {
+
+        const errorMsg = "The caller cannot be the broker or recipient";
+
+        await truffleAssert.reverts(
+            remittance.create(hash, funder, broker, toBN(2), {from: funder}),
+            errorMsg
+        );
+        checkEventNotEmitted();
+
+        await truffleAssert.reverts(
+            remittance.create(hash, broker, funder, toBN(2), {from: funder}),
+            errorMsg
+        );
+        checkEventNotEmitted();
+    });
+
+    it("Creating a remittance contract reverts if the amount is 0", async () => {
+        await truffleAssert.reverts(
+            remittance.create(hash, broker, recipient, 0, {from: funder}),
+            "The amount must be greater than 0"
+        );
+        checkEventNotEmitted();
+    });
+
+    it("Creating a remittance contract reverts if the amount exceeds the funder's balance", async () => {
+        await truffleAssert.reverts(
+            remittance.create(hash, broker, recipient, toBN(2), {from: funder}),
+            "There are insufficient funds in the funder's account to create this remittance contract"
+        );
+        checkEventNotEmitted();
+    });
+
+    it("Releasing funds reverts when using a zero length password", async () => {
+        await truffleAssert.reverts(
+            remittance.release("", {from: broker}),
+            "The concatenated password cannot be empty"
+        );
+        checkEventNotEmitted();
+    });
+
+    it("Releasing funds reverts when the sender is not the broker", async () => {
+        await truffleAssert.reverts(
+            remittance.release(concatPassword, {from: funder}),
+            "Only the broker can release funds for this remittance"
+        );
+        checkEventNotEmitted();
+    });
+
+    it("Releasing funds reverts when the broker does not have sufficient funds", async () => {
+
+        await remittance.deposit({from: funder, value: 5});
+        await remittance.create(hash, broker, recipient, 2, {from: funder});
+        const funderOwed = await remittance.balances(funder);
+
+        //Empty funder balance account
+        await remittance.withdraw(funderOwed, {from: funder});
+
+        await truffleAssert.reverts(
+            remittance.release(concatPassword, {from: broker}),
+            "There are insufficient funds available in the funder's contract balance"
+        );
+        checkEventNotEmitted();
+    });
+
+    it("Withdrawing funds reverts when amount is zero", async () => {
+
+        await remittance.deposit({from: funder, value: 5});
+
+        await truffleAssert.reverts(
+            remittance.withdraw(0, {from: funder}),
+            "The value must be greater than 0"
+        );
+        checkEventNotEmitted();
+    });
+
+    it("Withdrawing funds reverts when the withdrawer has insufficient funds", async () => {
+
+        await truffleAssert.reverts(
+            remittance.withdraw(1, {from: broker}),
+            "There are insufficient funds"
+        );
+        checkEventNotEmitted();
+    });
+
+    it("Contract can only be paused by the owner", async () => {
+
+        await truffleAssert.reverts(
+            remittance.pause({from: broker}),
+            "Ownable: caller is not the owner"
+        );
+
+        await truffleAssert.reverts(
+            remittance.unpause({from: broker}),
+            "Ownable: caller is not the owner"
+        );
+    });
+
+    it("Deposit is pausable and unpausable", async () => {
+
+        await remittance.pause({from: funder});
+
+        await truffleAssert.reverts(
+            remittance.deposit({from: funder, value: 5}),
+            "Pausable: paused"
+        );
+        checkEventNotEmitted();
+
+        await remittance.unpause({from: funder});
+        const txObj = await remittance.deposit({from: funder, value: 5});
+
+        truffleAssert.eventEmitted(txObj, 'Deposit');
+    });
+
+    it("Create is pausable and unpausable", async () => {
+
+        await remittance.deposit({from: funder, value: 5}),
+        await remittance.pause({from: funder});
+
+        await truffleAssert.reverts(
+            remittance.create(hash, broker, recipient, 2, {from: funder}),
+            "Pausable: paused"
+        );
+        checkEventNotEmitted();
+
+        await remittance.unpause({from: funder});
+        const txObj = await remittance.create(hash, broker, recipient, 2, {from: funder});
+
+        truffleAssert.eventEmitted(txObj, 'RemittanceContractCreated');
+    });
+
+    it("Release is pausable and unpausable", async () => {
+
+        await remittance.deposit({from: funder, value: 5}),
+        await remittance.create(hash, broker, recipient, 5, {from: funder});
+        await remittance.pause({from: funder});
+
+        await truffleAssert.reverts(
+            remittance.release(concatPassword, {from: broker}),
+            "Pausable: paused"
+        );
+        checkEventNotEmitted();
+
+    });
+
+    it("Withdraw is pausable and unpausable", async () => {
+
+        await remittance.deposit({from: funder, value: 5});
+        await remittance.pause({from: funder});
+
+        await truffleAssert.reverts(
+            remittance.withdraw(1, {from: funder}),
+            "Pausable: paused"
+        );
+        checkEventNotEmitted();
+    });
+
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
