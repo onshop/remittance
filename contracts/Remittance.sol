@@ -12,12 +12,11 @@ contract Remittance is Ownable, Pausable {
 
     mapping(address => uint) public balances;
 
-    mapping(bytes32 => RemittanceContract) public contracts;
+    mapping(bytes32 => RemittanceInstance) public remittances;
 
-    struct RemittanceContract {
+    struct RemittanceInstance {
         address funder;
         address broker;
-        address recipient;
         uint amount;
         bool fundsReleased;
     }
@@ -27,16 +26,15 @@ contract Remittance is Ownable, Pausable {
         uint amount
     );
 
-    event RemittanceContractCreated(
-        bytes32 hash,
+    event RemittanceCreated(
+        bytes32 indexed hash,
         address indexed funder,
         address indexed broker,
-        address indexed recipient,
         uint amount
     );
 
     event RemittanceFundsReleased(
-        bytes32 hash,
+        bytes32 indexed hash,
         address indexed broker,
         uint amount
     );
@@ -54,29 +52,26 @@ contract Remittance is Ownable, Pausable {
         emit Deposit(msg.sender, msg.value);
     }
 
-    // The funder can create a remittance contract
-    function create(bytes32 hash, address broker, address recipient, uint256 amount)
+    // The funder can create a remittance
+    function create(bytes32 hash, address broker, uint256 amount)
         external
         whenNotPaused
         returns(bool success)
     {
-
-        require(broker != recipient, "The broker is the same as the recipient");
-        require(broker != msg.sender && recipient != msg.sender, "The caller cannot be the broker or recipient");
+        require(broker != msg.sender, "The caller cannot be the broker");
         require(amount > 0, "The amount must be greater than 0");
 
         uint256 funderBalance = balances[msg.sender];
-        require(funderBalance >= amount, "There are insufficient funds in the funder's account to create this remittance contract");
+        require(funderBalance >= amount, "There are insufficient funds in the funder's account to create this remittance");
 
-        RemittanceContract storage remittanceContract = contracts[hash];
+        RemittanceInstance storage remittanceInstance = remittances[hash];
 
-        remittanceContract.funder = msg.sender;
-        remittanceContract.broker = broker;
-        remittanceContract.recipient = recipient;
-        remittanceContract.amount = amount;
-        remittanceContract.fundsReleased = false;
+        remittanceInstance.funder = msg.sender;
+        remittanceInstance.broker = broker;
+        remittanceInstance.amount = amount;
+        remittanceInstance.fundsReleased = false;
 
-        emit RemittanceContractCreated(hash, msg.sender, broker, recipient, amount);
+        emit RemittanceCreated(hash, msg.sender, broker, amount);
 
         return true;
     }
@@ -87,11 +82,11 @@ contract Remittance is Ownable, Pausable {
         require(bytes(concatenatedPassword).length > 0, "The concatenated password cannot be empty");
         bytes32 hash = keccak256(abi.encodePacked(concatenatedPassword));
 
-        //Retrieve remittance contract
-        RemittanceContract storage remittanceContract = contracts[hash];
-        uint amount = remittanceContract.amount;
-        address funder = remittanceContract.funder;
-        address broker = remittanceContract.broker;
+        //Retrieve remittance
+        RemittanceInstance storage remittanceInstance = remittances[hash];
+        uint amount = remittanceInstance.amount;
+        address funder = remittanceInstance.funder;
+        address broker = remittanceInstance.broker;
 
         require(msg.sender == broker, "Only the broker can release funds for this remittance");
 
@@ -105,7 +100,7 @@ contract Remittance is Ownable, Pausable {
         // Add to Broker balance
         balances[broker] = brokerBalance.add(amount);
 
-        remittanceContract.fundsReleased = true;
+        remittanceInstance.fundsReleased = true;
 
         emit RemittanceFundsReleased(hash, msg.sender, amount);
 
