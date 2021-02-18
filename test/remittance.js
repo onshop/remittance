@@ -61,6 +61,10 @@ contract('Remittance', async accounts => {
                     ev.amount.toString(10) === remittanceAmount;
         }, 'RemittanceCreated event is emitted');
 
+        // Check funder's changed contract balance is now reduced from 5 to 3 wei
+        const funderOwed = await remittance.balances(funder);
+        assert.strictEqual(funderOwed.toString(10), "3");
+
         const remittanceInstance = await remittance.remittances(hash);
 
         assert.strictEqual(remittanceInstance.funder, funder);
@@ -69,7 +73,7 @@ contract('Remittance', async accounts => {
         assert.strictEqual(remittanceInstance.fundsReleased, false);
     });
 
-    it("Broker releases funds from the funder's balance to their balance", async () => {
+    it("Broker releases funds to their account", async () => {
 
         const remittanceAmount = "2";
         await remittance.deposit({from: funder, value: 5});
@@ -83,47 +87,10 @@ contract('Remittance', async accounts => {
                     ev.amount.toString(10) === remittanceAmount;
         }, 'RemittanceFundsReleased event is emitted');
 
-        // Check funder's changed contract balance is now reduced from 5 to 3 wei
-        const funderOwed = await remittance.balances(funder);
-        assert.strictEqual(funderOwed.toString(10), "3");
-
-        // Check broker's changed contract balance now contains 2 wei
-        const brokerOwed = await remittance.balances(broker);
-        assert.strictEqual(brokerOwed.toString(10), remittanceAmount);
-
         // Check funds released is set to true
         const remittanceInstance = await remittance.remittances(hash);
         assert.strictEqual(remittanceInstance.fundsReleased, true);
 
-    });
-
-    it('Broker withdraws remittance after releasing funds into their balance', async () => {
-
-        const withDrawAmount = toBN(2);
-        await remittance.deposit({from: funder, value: 5});
-        await remittance.create(hash, broker, withDrawAmount, {from: funder});
-        await remittance.release(concatPassword, {from: broker});
-
-        const initContractEthBalance = toBN(await web3.eth.getBalance(remittance.address));
-        const initBrokerEthBalance = toBN(await web3.eth.getBalance(broker));
-
-        const txObj = await remittance.withdraw(withDrawAmount, {from: broker});
-
-        // Check broker's new Ether balance
-        const cost = toBN(await getGasCost(txObj));
-        const brokerEthBalance = toBN(await web3.eth.getBalance(broker));
-        const expectedBrokerEthBalance = initBrokerEthBalance.sub(cost).add(withDrawAmount).toString(10);
-        assert.strictEqual(brokerEthBalance.toString(10), expectedBrokerEthBalance);
-
-        // Check contract's new Ether balance
-        const contractEthBalance = toBN(await web3.eth.getBalance(remittance.address));
-        const expectedContractEthBalance = initContractEthBalance.sub(withDrawAmount).toString(10);
-        assert.strictEqual(contractEthBalance.toString(10), expectedContractEthBalance);
-
-        truffleAssert.eventEmitted(txObj, 'WithDraw', (ev) => {
-            return  ev.withdrawer === broker &&
-                    ev.amount.toString(10) === withDrawAmount.toString(10);
-        }, 'WithDraw event is emitted');
     });
 
     it("Deposit reverts if the deposit amount is zero", async () => {
@@ -173,22 +140,6 @@ contract('Remittance', async accounts => {
         await truffleAssert.reverts(
             remittance.release(concatPassword, {from: funder}),
             "Only the broker can release funds for this remittance"
-        );
-        checkEventNotEmitted();
-    });
-
-    it("Releasing funds reverts when the broker does not have sufficient funds", async () => {
-
-        await remittance.deposit({from: funder, value: 5});
-        await remittance.create(hash, broker, 2, {from: funder});
-        const funderOwed = await remittance.balances(funder);
-
-        //Empty funder balance account
-        await remittance.withdraw(funderOwed, {from: funder});
-
-        await truffleAssert.reverts(
-            remittance.release(concatPassword, {from: broker}),
-            "There are insufficient funds available in the funder's contract balance"
         );
         checkEventNotEmitted();
     });

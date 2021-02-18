@@ -64,6 +64,9 @@ contract Remittance is Ownable, Pausable {
         uint256 funderBalance = balances[msg.sender];
         require(funderBalance >= amount, "There are insufficient funds in the funder's account to create this remittance");
 
+        // Subtract from Funder balance
+        balances[msg.sender] = SafeMath.sub(funderBalance, amount);
+
         RemittanceInstance storage remittanceInstance = remittances[hash];
 
         remittanceInstance.funder = msg.sender;
@@ -77,7 +80,7 @@ contract Remittance is Ownable, Pausable {
     }
 
     // The broker takes concatenates their password with the recipient's password to release the funds
-    function release(string memory concatenatedPassword) public whenNotPaused returns(bool) {
+    function release(string memory concatenatedPassword) public whenNotPaused returns(bool success) {
 
         require(bytes(concatenatedPassword).length > 0, "The concatenated password cannot be empty");
         bytes32 hash = keccak256(abi.encodePacked(concatenatedPassword));
@@ -85,26 +88,16 @@ contract Remittance is Ownable, Pausable {
         //Retrieve remittance
         RemittanceInstance storage remittanceInstance = remittances[hash];
         uint amount = remittanceInstance.amount;
-        address funder = remittanceInstance.funder;
         address broker = remittanceInstance.broker;
 
+        require(remittanceInstance.fundsReleased == false, "The funds have already been released");
         require(msg.sender == broker, "Only the broker can release funds for this remittance");
 
-        uint256 funderBalance = balances[funder];
-        uint256 brokerBalance = balances[broker];
-
-        // Subtract from Funder balance
-        require(funderBalance >= amount, "There are insufficient funds available in the funder's contract balance");
-        balances[funder] = SafeMath.sub(funderBalance, amount);
-
-        // Add to Broker balance
-        balances[broker] = brokerBalance.add(amount);
-
+        emit RemittanceFundsReleased(hash, msg.sender, amount);
         remittanceInstance.fundsReleased = true;
 
-        emit RemittanceFundsReleased(hash, msg.sender, amount);
-
-        return true;
+        (success, ) = msg.sender.call{value: amount}("");
+        require(success, "Transfer failed");
     }
 
     // Generic withdraw function
