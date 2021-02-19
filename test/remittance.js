@@ -123,7 +123,7 @@ contract('Remittance', async accounts => {
     it("Creating a remittance reverts if the amount exceeds the funder's balance", async () => {
         await truffleAssert.reverts(
             remittance.create(hash, broker, 2, {from: funder}),
-            "There are insufficient funds in the funder's account to create this remittance"
+            "SafeMath: subtraction overflow"
         );
         checkEventNotEmitted();
     });

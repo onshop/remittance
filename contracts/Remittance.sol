@@ -62,7 +62,6 @@ contract Remittance is Ownable, Pausable {
         require(amount > 0, "The amount must be greater than 0");
 
         uint256 funderBalance = balances[msg.sender];
-        require(funderBalance >= amount, "There are insufficient funds in the funder's account to create this remittance");
 
         // Subtract from Funder balance
         balances[msg.sender] = funderBalance.sub(amount);
