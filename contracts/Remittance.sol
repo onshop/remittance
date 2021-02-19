@@ -17,31 +17,30 @@ contract Remittance is Ownable, Pausable {
     struct RemittanceInstance {
         address funder;
         address broker;
-        uint amount;
-        bool fundsReleased;
+        uint256 fundsOwed;
     }
 
     event Deposit(
         address indexed depositor,
-        uint amount
+        uint256 amount
     );
 
     event RemittanceCreated(
         bytes32 indexed hash,
         address indexed funder,
         address indexed broker,
-        uint amount
+        uint256 amount
     );
 
     event RemittanceFundsReleased(
         bytes32 indexed hash,
         address indexed broker,
-        uint amount
+        uint256 amount
     );
 
     event WithDraw(
         address indexed withdrawer,
-        uint amount
+        uint256 amount
     );
 
     // Generic deposit function
@@ -70,8 +69,7 @@ contract Remittance is Ownable, Pausable {
 
         remittanceInstance.funder = msg.sender;
         remittanceInstance.broker = broker;
-        remittanceInstance.amount = amount;
-        remittanceInstance.fundsReleased = false;
+        remittanceInstance.fundsOwed = amount;
 
         emit RemittanceCreated(hash, msg.sender, broker, amount);
 
@@ -81,26 +79,24 @@ contract Remittance is Ownable, Pausable {
     // The broker takes concatenates their password with the recipient's password to release the funds
     function release(string memory concatenatedPassword) public whenNotPaused returns(bool success) {
 
-        require(bytes(concatenatedPassword).length > 0, "The concatenated password cannot be empty");
+        require(bytes(concatenatedPassword).length > 0, "Password cannot be empty");
         bytes32 hash = keccak256(abi.encodePacked(concatenatedPassword));
 
         //Retrieve remittance
         RemittanceInstance storage remittanceInstance = remittances[hash];
-        uint amount = remittanceInstance.amount;
-        address broker = remittanceInstance.broker;
 
-        require(remittanceInstance.fundsReleased == false, "The funds have already been released");
-        require(msg.sender == broker, "Only the broker can release funds for this remittance");
+        require(msg.sender == remittanceInstance.broker, "Only the broker can release funds");
+        require(remittanceInstance.fundsOwed > 0, "The funds have already been released");
 
-        emit RemittanceFundsReleased(hash, msg.sender, amount);
-        remittanceInstance.fundsReleased = true;
+        emit RemittanceFundsReleased(hash, msg.sender, remittanceInstance.fundsOwed);
+        remittanceInstance.fundsOwed = 0;
 
-        (success, ) = msg.sender.call{value: amount}("");
+        (success, ) = msg.sender.call{value: remittanceInstance.fundsOwed}("");
         require(success, "Transfer failed");
     }
 
     // Generic withdraw function
-    function withdraw(uint amount) public whenNotPaused returns(bool success) {
+    function withdraw(uint256 amount) public whenNotPaused returns(bool success) {
 
         uint256 withdrawerBalance = balances[msg.sender];
         require(amount > 0, "The value must be greater than 0");

@@ -63,8 +63,7 @@ contract('Remittance', async accounts => {
 
         assert.strictEqual(remittanceInstance.funder, funder);
         assert.strictEqual(remittanceInstance.broker, broker);
-        assert.strictEqual(remittanceInstance.amount.toString(10), remittanceAmount);
-        assert.strictEqual(remittanceInstance.fundsReleased, false);
+        assert.strictEqual(remittanceInstance.fundsOwed.toString(10), remittanceAmount);
     });
 
     it("Broker releases funds to their account", async () => {
@@ -83,7 +82,7 @@ contract('Remittance', async accounts => {
 
         // Check funds released is set to true
         const remittanceInstance = await remittance.remittances(hash);
-        assert.strictEqual(remittanceInstance.fundsReleased, true);
+        assert.strictEqual(remittanceInstance.fundsOwed.toString(10), "0");
 
     });
 
@@ -125,7 +124,7 @@ contract('Remittance', async accounts => {
     it("Releasing funds reverts when using a zero length password", async () => {
         await truffleAssert.reverts(
             remittance.release("", {from: broker}),
-            "The concatenated password cannot be empty"
+            "Password cannot be empty"
         );
         checkEventNotEmitted();
     });
@@ -133,7 +132,7 @@ contract('Remittance', async accounts => {
     it("Releasing funds reverts when the sender is not the broker", async () => {
         await truffleAssert.reverts(
             remittance.release(concatPassword, {from: funder}),
-            "Only the broker can release funds for this remittance"
+            "Only the broker can release funds"
         );
         checkEventNotEmitted();
     });
