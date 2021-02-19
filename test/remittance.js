@@ -72,6 +72,8 @@ contract('Remittance', async accounts => {
         await remittance.deposit({from: funder, value: 5});
         await remittance.create(hash, broker, remittanceAmount, {from: funder});
 
+        const initContractEthBalance = toBN(await web3.eth.getBalance(remittance.address));
+
         const txObj = await remittance.release(concatPassword, {from: broker});
 
         truffleAssert.eventEmitted(txObj, 'RemittanceFundsReleased', (ev) => {
@@ -80,9 +82,14 @@ contract('Remittance', async accounts => {
                     ev.amount.toString(10) === remittanceAmount;
         }, 'RemittanceFundsReleased event is emitted');
 
-        // Check funds released is set to true
+        // Check the remittance 'fundsOwed' is set to zero
         const remittanceInstance = await remittance.remittances(hash);
         assert.strictEqual(remittanceInstance.fundsOwed.toString(10), "0");
+
+        // Check the remittance amount has been taken from the contract eth balance
+        const contractEthBalance = toBN(await web3.eth.getBalance(remittance.address));
+        const expectedContractEthBalance = initContractEthBalance.sub(remittanceInstance.fundsOwed).toString(10);
+        assert.strictEqual(contractEthBalance.toString(10), expectedContractEthBalance);
 
     });
 

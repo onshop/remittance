@@ -76,7 +76,7 @@ contract Remittance is Ownable, Pausable {
         return true;
     }
 
-    // The broker takes concatenates their password with the recipient's password to release the funds
+    // The broker concatenates their password with the recipient's password to release the funds
     function release(string memory concatenatedPassword) public whenNotPaused returns(bool success) {
 
         require(bytes(concatenatedPassword).length > 0, "Password cannot be empty");
