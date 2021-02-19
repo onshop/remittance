@@ -71,8 +71,8 @@ contract('Remittance', async accounts => {
         const remittanceAmount = "2";
         await remittance.deposit({from: funder, value: 5});
         await remittance.create(hash, broker, remittanceAmount, {from: funder});
-
         const initContractEthBalance = toBN(await web3.eth.getBalance(remittance.address));
+        const initFunderEthBalance = toBN(await web3.eth.getBalance(funder));
 
         const txObj = await remittance.release(concatPassword, {from: broker});
 
@@ -91,6 +91,11 @@ contract('Remittance', async accounts => {
         const expectedContractEthBalance = initContractEthBalance.sub(remittanceInstance.fundsOwed).toString(10);
         assert.strictEqual(contractEthBalance.toString(10), expectedContractEthBalance);
 
+        // Check the remittance amount has been sent to the broker eth balance
+        const funderEthBalance = toBN(await web3.eth.getBalance(funder));
+        const expectedFunderEthBalance = initFunderEthBalance.add(remittanceInstance.fundsOwed).toString(10);
+        assert.strictEqual(funderEthBalance.toString(10), expectedFunderEthBalance);
+
     });
 
     it("Deposit reverts if the deposit amount is zero", async () => {
@@ -106,7 +111,7 @@ contract('Remittance', async accounts => {
         const errorMsg = "The caller cannot be the broker";
 
         await truffleAssert.reverts(
-            remittance.create(hash, funder, toBN(2), {from: funder}),
+            remittance.create(hash, broker, toBN(2), {from: broker}),
             errorMsg
         );
         checkEventNotEmitted();
