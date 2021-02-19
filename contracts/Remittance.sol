@@ -65,7 +65,7 @@ contract Remittance is Ownable, Pausable {
         require(funderBalance >= amount, "There are insufficient funds in the funder's account to create this remittance");
 
         // Subtract from Funder balance
-        balances[msg.sender] = SafeMath.sub(funderBalance, amount);
+        balances[msg.sender] = funderBalance.sub(amount);
 
         RemittanceInstance storage remittanceInstance = remittances[hash];
 
