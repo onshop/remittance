@@ -57,6 +57,8 @@ contract Remittance is Ownable, Pausable {
         whenNotPaused
         returns(bool success)
     {
+
+        require(hash.length > 0, "Hash cannot be empty");
         require(broker != msg.sender, "The caller cannot be the broker");
         require(amount > 0, "The amount must be greater than 0");
 
