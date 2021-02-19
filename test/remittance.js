@@ -7,12 +7,6 @@ contract('Remittance', async accounts => {
     const concatPassword = "password1" + "password2";
     const hash = await web3.utils.soliditySha3(concatPassword);
 
-    const getGasCost = async txObj => {
-        const tx = await web3.eth.getTransaction(txObj.tx);
-
-        return toBN(txObj.receipt.gasUsed).mul(toBN(tx.gasPrice));
-    };
-
     const checkEventNotEmitted = async () => {
         const result = await truffleAssert.createTransactionResult(remittance, remittance.transactionHash);
 
@@ -195,7 +189,7 @@ contract('Remittance', async accounts => {
 
     it("Create is pausable and unpausable", async () => {
 
-        await remittance.deposit({from: funder, value: 5}),
+        await remittance.deposit({from: funder, value: 5});
         await remittance.pause({from: funder});
 
         await truffleAssert.reverts(
@@ -212,7 +206,7 @@ contract('Remittance', async accounts => {
 
     it("Release is pausable and unpausable", async () => {
 
-        await remittance.deposit({from: funder, value: 5}),
+        await remittance.deposit({from: funder, value: 5});
         await remittance.create(hash, broker, 5, {from: funder});
         await remittance.pause({from: funder});
 
