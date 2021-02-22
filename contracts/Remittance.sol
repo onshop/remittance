@@ -53,10 +53,10 @@ contract Remittance is Ownable, Pausable {
 
     // The funder can create a remittance
     function create(bytes32 hash, address broker)
-        external
-        payable
-        whenNotPaused
-        returns(bool success)
+    external
+    payable
+    whenNotPaused
+    returns(bool success)
     {
 
         require(hash.length > 0, "Hash cannot be empty");
@@ -66,9 +66,9 @@ contract Remittance is Ownable, Pausable {
         RemittanceInstance storage remittanceInstance = remittances[hash];
 
         remittanceInstance.broker = broker;
-        remittanceInstance.fundsOwed = amount;
+        remittanceInstance.fundsOwed = msg.value;
 
-        emit RemittanceCreated(hash, msg.sender, broker, amount);
+        emit RemittanceCreated(hash, msg.sender, broker, msg.value);
 
         return true;
     }
@@ -84,8 +84,6 @@ contract Remittance is Ownable, Pausable {
 
         require(msg.sender == remittanceInstance.broker, "Only the broker can release funds");
         require(remittanceInstance.fundsOwed > 0, "The funds have already been released");
-
-        balances[msg.sender] = funderBalance.add(msg.value);
 
         emit RemittanceFundsReleased(hash, msg.sender, remittanceInstance.fundsOwed);
 
@@ -117,7 +115,8 @@ contract Remittance is Ownable, Pausable {
         super._unpause();
     }
 
-    function hash(string password) public pure returns(bool success) {
+    // Enables the
+    function sha256(string memory password) public pure returns(bytes32) {
         return keccak256(abi.encodePacked(password));
     }
 }
