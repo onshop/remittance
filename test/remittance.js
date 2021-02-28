@@ -15,6 +15,12 @@ contract('Remittance', async accounts => {
         );
     };
 
+    const getGasCost = async txObj => {
+        const tx = await web3.eth.getTransaction(txObj.tx);
+
+        return toBN(txObj.receipt.gasUsed).mul(toBN(tx.gasPrice));
+    };
+
     const [funder, broker] = accounts;
     let remittance;
 
@@ -61,7 +67,6 @@ contract('Remittance', async accounts => {
 
         const remittanceInstance = await remittance.remittances(hash);
 
-        assert.strictEqual(remittanceInstance.funder, funder);
         assert.strictEqual(remittanceInstance.broker, broker);
         assert.strictEqual(remittanceInstance.fundsOwed.toString(10), remittanceAmount);
     });
@@ -88,12 +93,13 @@ contract('Remittance', async accounts => {
 
         // Check the remittance amount has been taken from the contract eth balance
         const contractEthBalance = toBN(await web3.eth.getBalance(remittance.address));
-        const expectedContractEthBalance = initContractEthBalance.sub(remittanceInstance.fundsOwed).toString(10);
+        const expectedContractEthBalance = initContractEthBalance.sub(toBN(2)).toString(10);
         assert.strictEqual(contractEthBalance.toString(10), expectedContractEthBalance);
 
         // Check the remittance amount has been sent to the broker eth balance
         const funderEthBalance = toBN(await web3.eth.getBalance(funder));
-        const expectedFunderEthBalance = initFunderEthBalance.add(remittanceInstance.fundsOwed).toString(10);
+        const cost = await getGasCost(txObj);
+        const expectedFunderEthBalance = initFunderEthBalance.add(remittanceInstance.fundsOwed).sub(cost).toString(10);
         assert.strictEqual(funderEthBalance.toString(10), expectedFunderEthBalance);
 
     });
@@ -117,10 +123,21 @@ contract('Remittance', async accounts => {
         checkEventNotEmitted();
     });
 
-    it("Creating a remittance reverts if the amount is 0", async () => {
+    it("Creating a remittance reverts if the hash is empty", async () => {
+
+        let emptyHash = await web3.utils.fromAscii('');
+
         await truffleAssert.reverts(
-            remittance.create(hash, broker, 0, {from: funder}),
-            "The amount must be greater than 0"
+            remittance.create(emptyHash, broker, {from: funder, value: 0}),
+            "Hash cannot be empty"
+        );
+        checkEventNotEmitted();
+
+        emptyHash = await web3.utils.soliditySha3('');
+
+        await truffleAssert.reverts(
+            remittance.create(emptyHash, broker, {from: funder, value: 0}),
+            "Hash cannot be empty"
         );
         checkEventNotEmitted();
     });
