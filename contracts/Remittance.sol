@@ -18,6 +18,7 @@ contract Remittance is Ownable, Pausable {
         address funder;
         address broker;
         uint256 fundsOwed;
+
     }
 
     event Deposit(
@@ -58,8 +59,9 @@ contract Remittance is Ownable, Pausable {
     whenNotPaused
     returns(bool success)
     {
-
-        require(hash.length > 0, "Hash cannot be empty");
+        emit RemittanceCreated(hash, msg.sender, broker, msg.value);
+        // check hash based on a bytes32 empty string or empty string hashed with sha3
+        require(hash != 0x00 && hash != 0x290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563, "Hash cannot be empty");
         require(broker != msg.sender, "The caller cannot be the broker");
         require(msg.value > 0, "The amount must be greater than 0");
 
@@ -115,8 +117,7 @@ contract Remittance is Ownable, Pausable {
         super._unpause();
     }
 
-    // Enables the
-    function sha256(string memory password) public pure returns(bytes32) {
+    function hash(string memory password) public pure returns(bytes32) {
         return keccak256(abi.encodePacked(password));
     }
 }
