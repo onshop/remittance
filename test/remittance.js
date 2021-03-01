@@ -54,7 +54,7 @@ contract('Remittance', async accounts => {
                     ev.funder === funder &&
                     ev.broker === broker &&
                     ev.amount.toString(10) === "2" &&
-                    ev.expiryDate === expiryDate;
+                    ev.expiryDate == expiryDate;
         }, 'RemittanceCreated event is emitted');
 
         const remittanceInstance = await remittance.remittances(rehash);
