@@ -10,8 +10,6 @@ contract Remittance is Ownable, Pausable {
 
     using SafeMath for uint256;
 
-    mapping(address => uint) public balances;
-
     mapping(bytes32 => RemittanceInstance) public remittances;
 
     struct RemittanceInstance {
