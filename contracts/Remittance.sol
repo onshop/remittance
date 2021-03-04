@@ -105,7 +105,7 @@ contract Remittance is Ownable, Pausable {
         require(remittanceInstance.valid, "No remittance found");
         require(fundsOwed > 0, "No funds available");
 
-        require(block.timestamp >= remittanceInstance.expiryDate, "The remittance has not passed");
+        require(block.timestamp >= remittanceInstance.expiryDate, "The remittance has not expired");
         require(msg.sender == remittanceInstance.funder, "Only the funder can reclaim funds");
 
         // Indicate that it was the funder who retrieved the expired funds

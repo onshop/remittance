@@ -99,7 +99,9 @@ contract('Remittance', async accounts => {
 
     });
 
-    it("Funder reclaims funds", async () => {
+    it("Funder reclaims funds from an expired remittance", async () => {
+
+        //Create a remittance with an expired date
         await remittance.create(hash, broker, expiredDate, {from: funder, value: 2});
         const initContractEthBalance = toBN(await web3.eth.getBalance(remittance.address));
         const initFunderEthBalance = toBN(await web3.eth.getBalance(funder));
@@ -125,7 +127,7 @@ contract('Remittance', async accounts => {
 
     });
 
-    it("Call external hash", async () => {
+    it("Call public hashing function", async () => {
         const hashedPassword = await remittance.keccak256Hash(password);
 
         assert.strictEqual(hashedPassword, hash);
@@ -295,7 +297,7 @@ contract('Remittance', async accounts => {
         // re-attempt
         await truffleAssert.reverts(
             remittance.reclaim(hash, broker, {from: funder}),
-            "The remittance has not passed"
+            "The remittance has not expired"
         );
         checkEventNotEmitted();
     });
