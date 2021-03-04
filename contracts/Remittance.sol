@@ -12,6 +12,7 @@ contract Remittance is Ownable, Pausable {
 
     mapping(bytes32 => RemittanceInstance) public remittances;
 
+    // The 'valid' element provides a flag for checking a bonafide hash key
     struct RemittanceInstance {
         address funder;
         address broker;
@@ -48,11 +49,10 @@ contract Remittance is Ownable, Pausable {
     whenNotPaused
     returns(bool success)
     {
-        checkIfHashIsEmpty(recipientPasswordHash);
         require(broker != msg.sender, "The caller cannot be the broker");
         require(msg.value > 0, "The amount must be greater than 0");
 
-        bytes32 rehash = keccak256(abi.encodePacked(recipientPasswordHash, broker));
+        bytes32 rehash = keccak256ReHash(recipientPasswordHash, broker);
 
         RemittanceInstance storage remittanceInstance = remittances[rehash];
 
@@ -70,8 +70,7 @@ contract Remittance is Ownable, Pausable {
     // The broker sends the recipient's password to release the funds
     function release(bytes32 recipientPasswordHash) external whenNotPaused returns(bool success) {
 
-        checkIfHashIsEmpty(recipientPasswordHash);
-        bytes32 rehash = keccak256(abi.encodePacked(recipientPasswordHash, address(msg.sender)));
+        bytes32 rehash = keccak256ReHash(recipientPasswordHash, address(msg.sender));
 
         //Retrieve remittance
         RemittanceInstance storage remittanceInstance = remittances[rehash];
@@ -83,6 +82,7 @@ contract Remittance is Ownable, Pausable {
 
         require(block.timestamp < remittanceInstance.expiryDate, "The remittance has expired");
 
+        // Indicate remittance has been collected
         remittanceInstance.fundsOwed = 0;
         remittanceInstance.expiryDate = 0;
 
@@ -92,10 +92,10 @@ contract Remittance is Ownable, Pausable {
         require(success, "Transfer failed");
     }
 
+    // Funder can retrieve funds if not claimed by the expiry date
     function reclaim(bytes32 recipientPasswordHash, address broker) external whenNotPaused returns(bool success) {
 
-        checkIfHashIsEmpty(recipientPasswordHash);
-        bytes32 rehash = keccak256(abi.encodePacked(recipientPasswordHash, broker));
+        bytes32 rehash = keccak256ReHash(recipientPasswordHash, broker);
 
         //Retrieve remittance
         RemittanceInstance storage remittanceInstance = remittances[rehash];
@@ -120,13 +120,18 @@ contract Remittance is Ownable, Pausable {
     }
 
     // Utility function
-    function keccak256Hash(string memory hashString) public pure returns(bytes32) {
-        return keccak256(abi.encodePacked(hashString));
+    function keccak256Hash(string memory hashStr) public pure returns(bytes32) {
+        require(bytes(hashStr).length > 0, 'Non-empty string required');
+
+        return keccak256(abi.encodePacked(hashStr));
     }
 
-    // check hash is not based on a bytes32 or sha3 hashed empty string
-    function checkIfHashIsEmpty(bytes32 hash) internal pure {
-        require(hash != bytes32(0) && hash != keccak256Hash('') && hash != keccak256(abi.encodePacked(uint(0))), "Hash cannot be empty");
+    function keccak256ReHash(bytes32 hash, address broker) internal pure returns(bytes32) {
+        require(broker != address(0), "Address cannot be zero");
+        require(hash != bytes32(0) && hash != keccak256(abi.encodePacked('')) && hash != keccak256(abi.encodePacked(uint(0))),
+                "Hash cannot be empty");
+
+        return keccak256(abi.encodePacked(hash, broker));
     }
 
     function pause() public onlyOwner {

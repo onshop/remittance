@@ -10,6 +10,7 @@ contract('Remittance', async accounts => {
     const emptyHash = await web3.utils.fromAscii("");
     const emptySha3Hash = await web3.utils.soliditySha3("");
     const wrongHash = await web3.utils.soliditySha3("wrongPassword");
+    const zeroAddress = "0x0000000000000000000000000000000000000000";
 
     const getFutureTimeStamp = (minsInFuture) => {
         return Math.floor(Date.now() / 1000) + minsInFuture * 60;
@@ -48,13 +49,13 @@ contract('Remittance', async accounts => {
 
         assert.strictEqual(contractEthBalance.toString(10), "2");
 
-        truffleAssert.eventEmitted(txObj, 'RemittanceCreated', (ev) => {
+        await truffleAssert.eventEmitted(txObj, 'RemittanceCreated', (ev) => {
 
             return  ev.hash === rehash &&
                     ev.funder === funder &&
                     ev.broker === broker &&
                     ev.amount.toString(10) === "2" &&
-                    ev.expiryDate === expiryDate;
+                    ev.expiryDate.toString(10) === expiryDate.toString(10);
         }, 'RemittanceCreated event is emitted');
 
         const remittanceInstance = await remittance.remittances(rehash);
@@ -74,7 +75,7 @@ contract('Remittance', async accounts => {
 
         const txObj = await remittance.release(hash, {from: broker});
 
-        truffleAssert.eventEmitted(txObj, 'RemittanceFundsReleased', (ev) => {
+        await truffleAssert.eventEmitted(txObj, 'RemittanceFundsReleased', (ev) => {
             return  ev.hash === rehash &&
                     ev.broker === broker &&
                     ev.amount.toString(10) === "2";
@@ -105,7 +106,7 @@ contract('Remittance', async accounts => {
 
         const txObj = await remittance.reclaim(hash, broker, {from: funder});
 
-        truffleAssert.eventEmitted(txObj, 'RemittanceFundsReclaimed', (ev) => {
+        await truffleAssert.eventEmitted(txObj, 'RemittanceFundsReclaimed', (ev) => {
             return  ev.hash === rehash &&
                     ev.funder === funder &&
                     ev.amount.toString(10) === "2";
@@ -122,6 +123,12 @@ contract('Remittance', async accounts => {
         const expectedFunderEthBalance = initFunderEthBalance.add(toBN(2)).sub(toBN(cost)).toString(10);
         assert.strictEqual(funderEthBalance.toString(10), expectedFunderEthBalance);
 
+    });
+
+    it("Call external hash", async () => {
+        const hashedPassword = await remittance.keccak256Hash(password);
+
+        assert.strictEqual(hashedPassword, hash);
     });
 
     it("Creating a remittance reverts using a zero length hash", async () => {
@@ -148,6 +155,14 @@ contract('Remittance', async accounts => {
         checkEventNotEmitted();
     });
 
+    it("Creating a remittance reverts when a zero address is used", async () => {
+
+        await truffleAssert.reverts(
+            remittance.create(hash, zeroAddress, expiryDate, {from: funder, value: 2}),
+            "Address cannot be zero"
+        );
+        checkEventNotEmitted();
+    });
 
     it("Creating a remittance reverts if the deposit amount is zero", async () => {
 
@@ -218,10 +233,20 @@ contract('Remittance', async accounts => {
         checkEventNotEmitted();
     });
 
+    it("Reclaiming a remittance reverts when a zero address is used", async () => {
+
+        await remittance.create(hash, broker, expiredDate, {from: funder, value: 2});
+
+        await truffleAssert.reverts(
+            remittance.reclaim(hash, zeroAddress, {from: funder}),
+            "Address cannot be zero"
+        );
+        checkEventNotEmitted();
+    });
+
     it("Reclaiming funds reverts when using a zero length hash", async () => {
 
-        await remittance.create(hash, broker, expiryDate, {from: funder, value: 2});
-        await remittance.release(hash, {from: broker});
+        await remittance.create(hash, broker, expiredDate, {from: funder, value: 2});
 
         await truffleAssert.reverts(
             remittance.reclaim(emptyHash, broker, {from: funder}),
@@ -229,8 +254,7 @@ contract('Remittance', async accounts => {
         );
         checkEventNotEmitted();
 
-        await remittance.create(hash, broker, expiryDate, {from: funder, value: 2});
-        await remittance.release(hash, {from: broker});
+        await remittance.create(hash, broker, expiredDate, {from: funder, value: 2});
 
         await truffleAssert.reverts(
             remittance.reclaim(emptySha3Hash, broker, {from: funder}),
@@ -251,7 +275,7 @@ contract('Remittance', async accounts => {
     });
 
 
-    it("Releasing funds reverts when the funds are zero", async () => {
+    it("Reclaiming funds reverts when the funds are zero", async () => {
 
         await remittance.create(hash, broker, expiryDate, {from: funder, value: 2});
         await remittance.release(hash, {from: broker});
@@ -264,7 +288,7 @@ contract('Remittance', async accounts => {
         checkEventNotEmitted();
     });
 
-    it("Releasing funds reverts when expiryDate has not transpired", async () => {
+    it("Reclaiming funds reverts when expiryDate has not transpired", async () => {
 
         await remittance.create(hash, broker, expiryDate, {from: funder, value: 2});
 
@@ -276,6 +300,12 @@ contract('Remittance', async accounts => {
         checkEventNotEmitted();
     });
 
+    it("Creating a hash with an empty string reverts", async () => {
+        await truffleAssert.reverts(
+            remittance.keccak256Hash("", {from: broker}),
+            "Non-empty string required"
+        );
+    });
 
     it("Remittance can only be paused by the owner", async () => {
 
@@ -290,7 +320,6 @@ contract('Remittance', async accounts => {
         );
     });
 
-
     it("Create is pausable and unpausable", async () => {
 
         await remittance.pause({from: funder});
@@ -304,7 +333,7 @@ contract('Remittance', async accounts => {
         await remittance.unpause({from: funder});
         const txObj = await remittance.create(hash, broker, 2, {from: funder, value: 2});
 
-        truffleAssert.eventEmitted(txObj, 'RemittanceCreated');
+        await truffleAssert.eventEmitted(txObj, 'RemittanceCreated');
     });
 
     it("Release is pausable and unpausable", async () => {
@@ -320,7 +349,7 @@ contract('Remittance', async accounts => {
 
         await remittance.unpause({from: funder});
         const txObj = await remittance.release(hash, {from: broker});
-        truffleAssert.eventEmitted(txObj, 'RemittanceFundsReleased');
+        await truffleAssert.eventEmitted(txObj, 'RemittanceFundsReleased');
     });
 
     it("Reclaim is pausable and unpausable", async () => {
@@ -336,6 +365,6 @@ contract('Remittance', async accounts => {
 
         await remittance.unpause({from: funder});
         const txObj = await remittance.reclaim(hash, broker, {from: funder});
-        truffleAssert.eventEmitted(txObj, 'RemittanceFundsReclaimed');
+        await truffleAssert.eventEmitted(txObj, 'RemittanceFundsReclaimed');
     });
 });
