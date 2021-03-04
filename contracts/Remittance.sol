@@ -110,7 +110,6 @@ contract Remittance is Ownable, Pausable {
 
         // Indicate that it was the funder who retrieved the expired funds
         remittanceInstance.broker = msg.sender;
-
         remittanceInstance.fundsOwed = 0;
 
         emit RemittanceFundsReclaimed(rehash, msg.sender, fundsOwed);
