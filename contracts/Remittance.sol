@@ -17,6 +17,7 @@ contract Remittance is Ownable, Pausable {
         address broker;
         uint256 fundsOwed;
         uint256 expiryDate;
+        bool valid;
     }
 
     event RemittanceCreated(
@@ -59,6 +60,7 @@ contract Remittance is Ownable, Pausable {
         remittanceInstance.broker = broker;
         remittanceInstance.fundsOwed = msg.value;
         remittanceInstance.expiryDate = expiryDate;
+        remittanceInstance.valid = true;
 
         emit RemittanceCreated(rehash, msg.sender, broker, msg.value, expiryDate);
 
@@ -76,11 +78,13 @@ contract Remittance is Ownable, Pausable {
 
         uint256 fundsOwed = remittanceInstance.fundsOwed;
 
+        require(remittanceInstance.valid, "No remittance found");
         require(fundsOwed > 0, "No funds available");
 
         require(block.timestamp < remittanceInstance.expiryDate, "The remittance has expired");
 
         remittanceInstance.fundsOwed = 0;
+        remittanceInstance.expiryDate = 0;
 
         emit RemittanceFundsReleased(rehash, msg.sender, fundsOwed);
 
@@ -98,9 +102,10 @@ contract Remittance is Ownable, Pausable {
 
         uint256 fundsOwed = remittanceInstance.fundsOwed;
 
+        require(remittanceInstance.valid, "No remittance found");
         require(fundsOwed > 0, "No funds available");
 
-        require(block.timestamp > remittanceInstance.expiryDate, "The remittance has not passed");
+        require(block.timestamp >= remittanceInstance.expiryDate, "The remittance has not passed");
         require(msg.sender == remittanceInstance.funder, "Only the funder can reclaim funds");
 
         // Indicate that it was the funder who retrieved the expired funds
@@ -114,14 +119,14 @@ contract Remittance is Ownable, Pausable {
         require(success, "Transfer failed");
     }
 
-    // check hash is not based on a bytes32 or sha3 hashed empty string
-    function checkIfHashIsEmpty(bytes32 hash) internal pure {
-        require(hash != bytes32(0) && hash != keccak256Hash('') && hash != keccak256(abi.encodePacked(uint(0))), "Hash cannot be empty");
-    }
-
     // Utility function
     function keccak256Hash(string memory hashString) public pure returns(bytes32) {
         return keccak256(abi.encodePacked(hashString));
+    }
+
+    // check hash is not based on a bytes32 or sha3 hashed empty string
+    function checkIfHashIsEmpty(bytes32 hash) internal pure {
+        require(hash != bytes32(0) && hash != keccak256Hash('') && hash != keccak256(abi.encodePacked(uint(0))), "Hash cannot be empty");
     }
 
     function pause() public onlyOwner {
