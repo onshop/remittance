@@ -21,7 +21,7 @@ contract Remittance is Ownable, Pausable {
         bool valid;
     }
 
-    event RemittanceCreated(
+    event RemittanceFundsCreated(
         bytes32 indexed hash,
         address indexed funder,
         address indexed broker,
@@ -62,7 +62,7 @@ contract Remittance is Ownable, Pausable {
         remittanceInstance.expiryDate = expiryDate;
         remittanceInstance.valid = true;
 
-        emit RemittanceCreated(rehash, msg.sender, broker, msg.value, expiryDate);
+        emit RemittanceFundsCreated(rehash, msg.sender, broker, msg.value, expiryDate);
 
         return true;
     }

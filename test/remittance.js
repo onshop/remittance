@@ -49,14 +49,14 @@ contract('Remittance', async accounts => {
 
         assert.strictEqual(contractEthBalance.toString(10), "2");
 
-        await truffleAssert.eventEmitted(txObj, 'RemittanceCreated', (ev) => {
+        await truffleAssert.eventEmitted(txObj, 'RemittanceFundsCreated', (ev) => {
 
             return  ev.hash === rehash &&
                     ev.funder === funder &&
                     ev.broker === broker &&
                     ev.amount.toString(10) === "2" &&
                     ev.expiryDate.toString(10) === expiryDate.toString(10);
-        }, 'RemittanceCreated event is emitted');
+        }, 'RemittanceFundsCreated event is emitted');
 
         const remittanceInstance = await remittance.remittances(rehash);
 
@@ -335,7 +335,7 @@ contract('Remittance', async accounts => {
         await remittance.unpause({from: funder});
         const txObj = await remittance.create(hash, broker, 2, {from: funder, value: 2});
 
-        await truffleAssert.eventEmitted(txObj, 'RemittanceCreated');
+        await truffleAssert.eventEmitted(txObj, 'RemittanceFundsCreated');
     });
 
     it("Release is pausable and unpausable", async () => {
