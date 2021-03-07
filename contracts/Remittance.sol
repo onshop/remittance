@@ -12,12 +12,10 @@ contract Remittance is Ownable, Pausable {
 
     mapping(bytes32 => RemittanceInstance) public remittances;
 
-    // The 'valid' element provides a flag for checking a bonafide hash key
     struct RemittanceInstance {
         address funder;
         uint256 fundsOwed;
         uint256 expiryDate;
-        bool valid;
     }
 
     event RemittanceFundsCreated(
@@ -60,7 +58,6 @@ contract Remittance is Ownable, Pausable {
         remittanceInstance.funder = msg.sender;
         remittanceInstance.fundsOwed = msg.value;
         remittanceInstance.expiryDate = expiryDate;
-        remittanceInstance.valid = true;
 
         emit RemittanceFundsCreated(recipientPasswordHash, msg.sender, broker, msg.value, expiryDate);
 
@@ -78,9 +75,7 @@ contract Remittance is Ownable, Pausable {
 
         uint256 fundsOwed = remittanceInstance.fundsOwed;
 
-        require(remittanceInstance.valid, "No remittance found");
         require(fundsOwed > 0, "No funds available");
-
         require(block.timestamp < remittanceInstance.expiryDate, "The remittance has expired");
 
         // Indicate remittance has been collected
@@ -103,9 +98,7 @@ contract Remittance is Ownable, Pausable {
 
         uint256 fundsOwed = remittanceInstance.fundsOwed;
 
-        require(remittanceInstance.valid, "No remittance found");
         require(fundsOwed > 0, "No funds available");
-
         require(block.timestamp >= remittanceInstance.expiryDate, "The remittance has not expired");
         require(msg.sender == remittanceInstance.funder, "Only the funder can reclaim funds");
 

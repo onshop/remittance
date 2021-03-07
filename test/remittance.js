@@ -7,6 +7,7 @@ contract('Remittance', async accounts => {
     const password = "password";
     const hash = await web3.utils.soliditySha3(password);
     const emptyErrorMsg = "Hash cannot be empty";
+    const noFundsAvailable = "No funds available";
     const emptyHash = await web3.utils.fromAscii("");
     const emptySha3Hash = await web3.utils.soliditySha3("");
     const wrongHash = await web3.utils.soliditySha3("wrongPassword");
@@ -63,7 +64,6 @@ contract('Remittance', async accounts => {
         assert.strictEqual(remittanceInstance.funder, funder);
         assert.strictEqual(remittanceInstance.fundsOwed.toString(10), "2");
         assert.strictEqual(remittanceInstance.expiryDate.toString(10), expiryDate.toString(10));
-        assert.isTrue(remittanceInstance.valid);
     });
 
     it("Broker releases funds to their account", async () => {
@@ -84,7 +84,6 @@ contract('Remittance', async accounts => {
 
         assert.strictEqual(remittanceInstance.fundsOwed.toString(10), "0");
         assert.strictEqual(remittanceInstance.expiryDate.toString(10), "0");
-        assert.isTrue(remittanceInstance.valid);
 
         // Check the remittance amount has been taken from the contract eth balance
         const contractEthBalance = toBN(await web3.eth.getBalance(remittance.address));
@@ -117,7 +116,6 @@ contract('Remittance', async accounts => {
         const remittanceInstance = await remittance.remittances(rehash);
         assert.strictEqual(remittanceInstance.fundsOwed.toString(10), "0");
         assert.strictEqual(remittanceInstance.expiryDate.toString(10), "0");
-        assert.isTrue(remittanceInstance.valid);
 
         // Check the remittance amount has been taken from the contract eth balance
         const contractEthBalance = toBN(await web3.eth.getBalance(remittance.address));
@@ -212,13 +210,13 @@ contract('Remittance', async accounts => {
 
         await truffleAssert.reverts(
             remittance.release(wrongHash, {from: broker}),
-            "No remittance found"
+            noFundsAvailable
         );
         checkEventNotEmitted();
 
         await truffleAssert.reverts(
             remittance.release(hash, {from: funder}),
-            "No remittance found"
+            noFundsAvailable
         );
         checkEventNotEmitted();
 
@@ -232,7 +230,7 @@ contract('Remittance', async accounts => {
         // re-attempt
         await truffleAssert.reverts(
             remittance.release(hash, {from: broker}),
-            "No funds available"
+            noFundsAvailable
         );
         checkEventNotEmitted();
     });
@@ -279,7 +277,7 @@ contract('Remittance', async accounts => {
 
         await truffleAssert.reverts(
             remittance.reclaim(wrongHash, {from: funder}),
-            "No remittance found"
+            noFundsAvailable
         );
         checkEventNotEmitted();
     });
@@ -292,7 +290,7 @@ contract('Remittance', async accounts => {
         // re-attempt
         await truffleAssert.reverts(
             remittance.reclaim(rehash, {from: funder}),
-            "No funds available"
+            noFundsAvailable
         );
         checkEventNotEmitted();
     });
