@@ -130,10 +130,16 @@ contract('Remittance', async accounts => {
 
     });
 
-    it("Call public hashing function", async () => {
-        const hashedPassword = await remittance.keccak256Hash(password);
+    it("Call public password hashing function", async () => {
+        const hashedPassword = await remittance.keccak256Password(password);
 
         assert.strictEqual(hashedPassword, hash);
+    });
+
+    it("Call public password hash and broker rehashing function", async () => {
+        const reHashedPassword = await remittance.keccak256PasswordHashBroker(hash, broker);
+
+        assert.strictEqual(reHashedPassword, rehash);
     });
 
     it("Creating a remittance reverts using a zero length hash", async () => {
@@ -309,8 +315,28 @@ contract('Remittance', async accounts => {
 
     it("Creating a hash with an empty string reverts", async () => {
         await truffleAssert.reverts(
-            remittance.keccak256Hash("", {from: broker}),
+            remittance.keccak256Password("", {from: broker}),
             "Non-empty string required"
+        );
+    });
+
+    it("Rehashing using a hash with a zero length hash reverts", async () => {
+
+        await truffleAssert.reverts(
+            remittance.keccak256PasswordHashBroker(emptyHash, broker),
+            emptyErrorMsg
+        );
+
+        await truffleAssert.reverts(
+            remittance.keccak256PasswordHashBroker(emptySha3Hash, broker),
+            emptyErrorMsg
+        );
+    });
+
+    it("Rehashing using a zero address reverts", async () => {
+        await truffleAssert.reverts(
+            remittance.keccak256PasswordHashBroker(hash, zeroAddress),
+            "Address cannot be zero"
         );
     });
 

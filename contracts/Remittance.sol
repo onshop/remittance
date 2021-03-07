@@ -67,8 +67,7 @@ contract Remittance is Ownable, Pausable {
     // The broker sends the recipient's password to release the funds
     function release(bytes32 recipientPasswordHash) external whenNotPaused returns(bool success) {
 
-        checkEmptyHash(recipientPasswordHash);
-        bytes32 rehash = keccak256(abi.encodePacked(recipientPasswordHash, address(msg.sender)));
+        bytes32 rehash = keccak256PasswordHashBroker(recipientPasswordHash, address(msg.sender));
 
         //Retrieve remittance
         RemittanceInstance storage remittanceInstance = remittances[rehash];
@@ -113,10 +112,18 @@ contract Remittance is Ownable, Pausable {
     }
 
     // Utility function
-    function keccak256Hash(string memory hashStr) public pure returns(bytes32) {
-        require(bytes(hashStr).length > 0, 'Non-empty string required');
+    function keccak256Password(string memory passwordStr) public pure returns(bytes32) {
+        require(bytes(passwordStr).length > 0, 'Non-empty string required');
 
-        return keccak256(abi.encodePacked(hashStr));
+        return keccak256(abi.encodePacked(passwordStr));
+    }
+
+    // Utility function
+    function keccak256PasswordHashBroker(bytes32 passwordHash, address broker) public pure returns(bytes32) {
+        checkEmptyHash(passwordHash);
+        require(broker != address(0), "Address cannot be zero");
+
+        return keccak256(abi.encodePacked(passwordHash, broker));
     }
 
     function checkEmptyHash(bytes32 hash) internal pure returns(bool) {
