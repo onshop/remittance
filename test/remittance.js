@@ -3,14 +3,14 @@ const Remittance = artifacts.require("./Remittance.sol");
 
 contract('Remittance', async accounts => {
 
-    const { toBN } = web3.utils;
+    const { toBN, soliditySha3} = web3.utils;
     const password = "password";
-    const hash = await web3.utils.soliditySha3(password);
+    const hash = await soliditySha3(password);
     const emptyErrorMsg = "Hash cannot be empty";
     const noFundsAvailable = "No funds available";
     const emptyHash = await web3.utils.fromAscii("");
-    const emptySha3Hash = await web3.utils.soliditySha3("");
-    const wrongHash = await web3.utils.soliditySha3("wrongPassword");
+    const emptySha3Hash = await soliditySha3("");
+    const wrongHash = await soliditySha3("wrongPassword");
     const zeroAddress = "0x0000000000000000000000000000000000000000";
 
     const getFutureTimeStamp = (minsInFuture) => {
@@ -34,7 +34,7 @@ contract('Remittance', async accounts => {
     const expiryDate = getFutureTimeStamp(15);
     const expiredDate = getFutureTimeStamp(0);
     const [funder, broker] = accounts;
-    const rehash = await web3.utils.soliditySha3(hash, broker);
+    const rehash = await soliditySha3(hash, broker);
     let remittance;
 
     beforeEach("Deploy and prepare", async function() {
