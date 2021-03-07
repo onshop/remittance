@@ -61,10 +61,9 @@ contract('Remittance', async accounts => {
         const remittanceInstance = await remittance.remittances(rehash);
 
         assert.strictEqual(remittanceInstance.funder, funder);
-        assert.strictEqual(remittanceInstance.broker, broker);
         assert.strictEqual(remittanceInstance.fundsOwed.toString(10), "2");
         assert.strictEqual(remittanceInstance.expiryDate.toString(10), expiryDate.toString(10));
-        assert.isNotFalse(remittanceInstance.valid);
+        assert.isTrue(remittanceInstance.valid);
     });
 
     it("Broker releases funds to their account", async () => {
@@ -85,6 +84,7 @@ contract('Remittance', async accounts => {
 
         assert.strictEqual(remittanceInstance.fundsOwed.toString(10), "0");
         assert.strictEqual(remittanceInstance.expiryDate.toString(10), "0");
+        assert.isTrue(remittanceInstance.valid);
 
         // Check the remittance amount has been taken from the contract eth balance
         const contractEthBalance = toBN(await web3.eth.getBalance(remittance.address));
@@ -113,6 +113,11 @@ contract('Remittance', async accounts => {
                     ev.funder === funder &&
                     ev.amount.toString(10) === "2";
         }, 'RemittanceFundsReclaimed event is emitted');
+
+        const remittanceInstance = await remittance.remittances(rehash);
+        assert.strictEqual(remittanceInstance.fundsOwed.toString(10), "0");
+        assert.strictEqual(remittanceInstance.expiryDate.toString(10), "0");
+        assert.isTrue(remittanceInstance.valid);
 
         // Check the remittance amount has been taken from the contract eth balance
         const contractEthBalance = toBN(await web3.eth.getBalance(remittance.address));
@@ -278,7 +283,7 @@ contract('Remittance', async accounts => {
         );
         checkEventNotEmitted();
     });
-
+    
     it("Reclaiming funds reverts when the funds are zero", async () => {
 
         await remittance.create(rehash, broker, expiryDate, {from: funder, value: 2});
