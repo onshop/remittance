@@ -46,9 +46,10 @@ contract Remittance is Ownable, Pausable {
     whenNotPaused
     returns(bool success)
     {
-        require(broker != msg.sender, "The caller cannot be the broker");
-        require(msg.value > 0, "The amount must be greater than 0");
+        require(broker != msg.sender, "Caller cannot be the broker");
+        require(msg.value > 0, "Amount must be greater than 0");
         require(broker != address(0), "Address cannot be zero");
+        require(expiryDate >= block.timestamp + (24 * 60 * 60), "Expiry less than 24h ahead");
         checkEmptyHash(recipientPasswordHash);
 
         RemittanceInstance storage remittanceInstance = remittances[recipientPasswordHash];
@@ -75,7 +76,7 @@ contract Remittance is Ownable, Pausable {
         uint256 fundsOwed = remittanceInstance.fundsOwed;
 
         require(fundsOwed > 0, "No funds available");
-        require(block.timestamp < remittanceInstance.expiryDate, "The remittance has expired");
+        require(block.timestamp < remittanceInstance.expiryDate, "Remittance has expired");
 
         // Indicate remittance has been collected
         remittanceInstance.fundsOwed = 0;

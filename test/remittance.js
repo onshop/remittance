@@ -1,5 +1,7 @@
 const truffleAssert = require('truffle-assertions');
+const timeMachine = require('ganache-time-traveler');
 const Remittance = artifacts.require("./Remittance.sol");
+
 
 contract('Remittance', async accounts => {
 
@@ -12,9 +14,10 @@ contract('Remittance', async accounts => {
     const emptySha3Hash = await soliditySha3("");
     const wrongHash = await soliditySha3("wrongPassword");
     const zeroAddress = "0x0000000000000000000000000000000000000000";
+    const day24hourinSecs = 86400;
 
-    const getFutureTimeStamp = (minsInFuture) => {
-        return Math.floor(Date.now() / 1000) + minsInFuture * 60;
+    const futureTimeStamp = () => {
+        return Math.floor(Date.now() / 1000) + day24hourinSecs;
     };
 
     const checkEventNotEmitted = async () => {
@@ -31,18 +34,22 @@ contract('Remittance', async accounts => {
         return toBN(txObj.receipt.gasUsed).mul(toBN(tx.gasPrice));
     };
 
-    const expiryDate = getFutureTimeStamp(15);
-    const expiredDate = getFutureTimeStamp(0);
     const [funder, broker] = accounts;
     const rehash = await soliditySha3(hash, broker);
     let remittance;
 
     beforeEach("Deploy and prepare", async function() {
         remittance = await Remittance.new({from: funder});
+        snapShot = await timeMachine.takeSnapshot();
+        snapshotId = snapShot['result'];
+    });
+    afterEach(async() => {
+        await timeMachine.revertToSnapshot(snapshotId);
     });
 
     it("Funder creates a remittance", async () => {
 
+        let expiryDate = futureTimeStamp();
         const txObj = await remittance.create(rehash, broker, expiryDate, {from: funder, value: 2});
 
         // Check contract's changed ETH balance
@@ -67,6 +74,8 @@ contract('Remittance', async accounts => {
     });
 
     it("Broker releases funds to their account", async () => {
+
+        let expiryDate = futureTimeStamp();
 
         await remittance.create(rehash, broker, expiryDate, {from: funder, value: 2});
         const initContractEthBalance = toBN(await web3.eth.getBalance(remittance.address));
@@ -100,10 +109,13 @@ contract('Remittance', async accounts => {
 
     it("Funder reclaims funds from an expired remittance", async () => {
 
+        let expiryDate = futureTimeStamp();
+
         //Create a remittance with an expired date
-        await remittance.create(rehash, broker, expiredDate, {from: funder, value: 2});
+        await remittance.create(rehash, broker, expiryDate, {from: funder, value: 2});
         const initContractEthBalance = toBN(await web3.eth.getBalance(remittance.address));
         const initFunderEthBalance = toBN(await web3.eth.getBalance(funder));
+        await timeMachine.advanceTimeAndBlock(day24hourinSecs);
 
         const txObj = await remittance.reclaim(rehash, {from: funder});
 
@@ -144,11 +156,15 @@ contract('Remittance', async accounts => {
 
     it("Creating a remittance reverts using a zero length hash", async () => {
 
+        let expiryDate = futureTimeStamp();
+
         await truffleAssert.reverts(
             remittance.create(emptyHash, broker, expiryDate, {from: funder, value: 2}),
             emptyErrorMsg
         );
         checkEventNotEmitted();
+
+        expiryDate = futureTimeStamp();
 
         await truffleAssert.reverts(
             remittance.create(emptySha3Hash, broker, expiryDate, {from: funder, value: 2}),
@@ -159,14 +175,18 @@ contract('Remittance', async accounts => {
 
     it("Creating a remittance reverts if the caller is the same as the broker", async () => {
 
+        let expiryDate = futureTimeStamp();
+
         await truffleAssert.reverts(
             remittance.create(hash, funder, expiryDate, {from: funder, value: 2}),
-            "The caller cannot be the broker"
+            "Caller cannot be the broker"
         );
         checkEventNotEmitted();
     });
 
     it("Creating a remittance reverts when a zero address is used", async () => {
+
+        let expiryDate = futureTimeStamp();
 
         await truffleAssert.reverts(
             remittance.create(hash, zeroAddress, expiryDate, {from: funder, value: 2}),
@@ -177,15 +197,18 @@ contract('Remittance', async accounts => {
 
     it("Creating a remittance reverts if the deposit amount is zero", async () => {
 
+        let expiryDate = futureTimeStamp();
+
         await truffleAssert.reverts(
             remittance.create(hash, broker, expiryDate, {from: funder, value: 0}),
-            "The amount must be greater than 0"
+            "Amount must be greater than 0"
         );
         checkEventNotEmitted();
     });
 
     it("Creating a remittance reverts if identical arguments are submitted", async () => {
 
+        let expiryDate = futureTimeStamp();
         await remittance.create(rehash, broker, expiryDate, {from: funder, value: 2});
 
         await truffleAssert.reverts(
@@ -196,6 +219,9 @@ contract('Remittance', async accounts => {
     });
 
     it("Releasing funds reverts when using a zero length hash", async () => {
+
+        let expiryDate = futureTimeStamp();
+        await remittance.create(rehash, broker, expiryDate, {from: funder, value: 2});
 
         await truffleAssert.reverts(
             remittance.release(emptyHash, {from: broker}),
@@ -212,6 +238,7 @@ contract('Remittance', async accounts => {
 
     it("Releasing funds reverts when hash is invalid", async () => {
 
+        let expiryDate = futureTimeStamp();
         await remittance.create(rehash, broker, expiryDate, {from: funder, value: 2});
 
         await truffleAssert.reverts(
@@ -230,6 +257,7 @@ contract('Remittance', async accounts => {
 
     it("Releasing funds reverts when the funds are zero", async () => {
 
+        let expiryDate = futureTimeStamp();
         await remittance.create(rehash, broker, expiryDate, {from: funder, value: 2});
         await remittance.release(hash, {from: broker});
 
@@ -243,20 +271,22 @@ contract('Remittance', async accounts => {
 
     it("Releasing funds reverts when the remittance has expired", async () => {
 
-        const expiredDate = getFutureTimeStamp(0);
-
-        await remittance.create(rehash, broker, expiredDate, {from: funder, value: 2});
+        let expiryDate = futureTimeStamp();
+        await remittance.create(rehash, broker, expiryDate, {from: funder, value: 2});
+        await timeMachine.advanceTimeAndBlock(day24hourinSecs + 1);
 
         await truffleAssert.reverts(
             remittance.release(hash, {from: broker}),
-            "The remittance has expired"
+            "Remittance has expired"
         );
         checkEventNotEmitted();
     });
 
     it("Reclaiming funds reverts when using a zero length hash", async () => {
 
-        await remittance.create(rehash, broker, expiredDate, {from: funder, value: 2});
+        let expiryDate = futureTimeStamp();
+        await remittance.create(rehash, broker, expiryDate, {from: funder, value: 2});
+        await timeMachine.advanceTimeAndBlock(day24hourinSecs);
 
         await truffleAssert.reverts(
             remittance.reclaim(emptyHash, {from: funder}),
@@ -268,7 +298,9 @@ contract('Remittance', async accounts => {
 
     it("Reclaiming funds reverts when using a zero length sha3 hash", async () => {
 
-        await remittance.create(rehash, broker, expiredDate, {from: funder, value: 2});
+        let expiryDate = futureTimeStamp();
+        await remittance.create(rehash, broker, expiryDate, {from: funder, value: 2});
+        await timeMachine.advanceTimeAndBlock(day24hourinSecs);
 
         await truffleAssert.reverts(
             remittance.reclaim(emptySha3Hash, {from: funder}),
@@ -279,7 +311,9 @@ contract('Remittance', async accounts => {
 
     it("Reclaiming funds reverts when hash is invalid", async () => {
 
-        await remittance.create(rehash, broker, expiredDate, {from: funder, value: 2});
+        let expiryDate = futureTimeStamp();
+        await remittance.create(rehash, broker, expiryDate, {from: funder, value: 2});
+        await timeMachine.advanceTimeAndBlock(day24hourinSecs);
 
         await truffleAssert.reverts(
             remittance.reclaim(wrongHash, {from: funder}),
@@ -287,11 +321,13 @@ contract('Remittance', async accounts => {
         );
         checkEventNotEmitted();
     });
-    
+
     it("Reclaiming funds reverts when the funds are zero", async () => {
 
+        let expiryDate = futureTimeStamp(day24hourinSecs);
         await remittance.create(rehash, broker, expiryDate, {from: funder, value: 2});
         await remittance.release(hash, {from: broker});
+        await timeMachine.advanceTimeAndBlock(day24hourinSecs);
 
         // re-attempt
         await truffleAssert.reverts(
@@ -301,8 +337,9 @@ contract('Remittance', async accounts => {
         checkEventNotEmitted();
     });
 
-    it("Reclaiming funds reverts when expiryDate has not transpired", async () => {
+    it("Reclaiming funds reverts when expiryDate has not expired", async () => {
 
+        let expiryDate = futureTimeStamp();
         await remittance.create(rehash, broker, expiryDate, {from: funder, value: 2});
 
         // re-attempt
@@ -355,6 +392,7 @@ contract('Remittance', async accounts => {
 
     it("Create is pausable and unpausable", async () => {
 
+        let expiryDate = futureTimeStamp();
         await remittance.pause({from: funder});
 
         await truffleAssert.reverts(
@@ -363,14 +401,16 @@ contract('Remittance', async accounts => {
         );
         checkEventNotEmitted();
 
+        expiryDate = futureTimeStamp();
         await remittance.unpause({from: funder});
-        const txObj = await remittance.create(rehash, broker, 2, {from: funder, value: 2});
+        const txObj = await remittance.create(rehash, broker, expiryDate, {from: funder, value: 2});
 
         await truffleAssert.eventEmitted(txObj, 'RemittanceFundsCreated');
     });
 
     it("Release is pausable and unpausable", async () => {
 
+       let expiryDate = futureTimeStamp();
        await remittance.create(rehash, broker, expiryDate, {from: funder, value: 2});
        await remittance.pause({from: funder});
 
@@ -387,7 +427,9 @@ contract('Remittance', async accounts => {
 
     it("Reclaim is pausable and unpausable", async () => {
 
-        await remittance.create(rehash, broker, expiredDate, {from: funder, value: 2});
+        let expiryDate = futureTimeStamp();
+        await remittance.create(rehash, broker, expiryDate, {from: funder, value: 2});
+        await timeMachine.advanceTimeAndBlock(day24hourinSecs);
         await remittance.pause({from: funder});
 
         await truffleAssert.reverts(
