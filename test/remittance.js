@@ -2,7 +2,6 @@ const truffleAssert = require('truffle-assertions');
 const timeMachine = require('ganache-time-traveler');
 const Remittance = artifacts.require("./Remittance.sol");
 
-
 contract('Remittance', async accounts => {
 
     const { toBN, soliditySha3} = web3.utils;
