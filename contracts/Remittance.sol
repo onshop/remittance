@@ -49,8 +49,9 @@ contract Remittance is Ownable, Pausable {
         require(broker != msg.sender, "Caller cannot be the broker");
         require(msg.value > 0, "Amount must be greater than 0");
         require(broker != address(0), "Address cannot be zero");
-        // Block timestamp can be as much as 627 seconds behind UI
-        require(expiryDate >= block.timestamp + (24 * 60 * 60) - 700, "Expiry less than 24h ahead");
+
+        // A 15 min margin has been added to allow for any lag
+        require(expiryDate >= block.timestamp + (24 * 60 * 60) - 1500, "Expiry less than 24h ahead");
         checkEmptyHash(passwordBrokerHash);
 
         RemittanceInstance storage remittanceInstance = remittances[passwordBrokerHash];
