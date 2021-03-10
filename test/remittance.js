@@ -39,10 +39,11 @@ contract('Remittance', async accounts => {
     const wrongPassBytes32 = await soliditySha3(wrongPasswordString);
     const hash = await soliditySha3(passBytes32, broker);
     let remittance;
+    let snapshotId;
 
     beforeEach("Deploy and prepare", async function() {
         remittance = await Remittance.new({from: funder});
-        snapShot = await timeMachine.takeSnapshot();
+        const snapShot = await timeMachine.takeSnapshot();
         snapshotId = snapShot['result'];
     });
     afterEach(async() => {
@@ -79,18 +80,19 @@ contract('Remittance', async accounts => {
     it("Broker releases funds to their account", async () => {
 
         const expiryDate = futureTimeStamp();
-
         await remittance.create(hash, broker, expiryDate, {from: funder, value: 2});
 
         const initContractEthBalance = toBN(await getBalance(remittance.address));
+        assert.strictEqual(initContractEthBalance.toString(10), "2");
+
         const initBrokerEthBalance = toBN(await getBalance(broker));
 
         const txObj = await remittance.release(passBytes32, {from: broker});
 
         await truffleAssert.eventEmitted(txObj, 'RemittanceFundsReleased', (ev) => {
-        return  ev.hash === hash &&
-                ev.broker === broker &&
-                ev.amount.toString(10) === "2";
+            return  ev.hash === hash &&
+                    ev.broker === broker &&
+                    ev.amount.toString(10) === "2";
         }, 'RemittanceFundsReleased event is emitted');
 
         const remittanceInstance = await remittance.remittances(hash);
@@ -100,13 +102,12 @@ contract('Remittance', async accounts => {
 
         // Check the remittance amount has been taken from the contract eth balance
         const contractEthBalance = toBN(await getBalance(remittance.address));
-        const expectedContractEthBalance = initContractEthBalance.sub(toBN(2)).toString(10);
-        assert.strictEqual(contractEthBalance.toString(10), expectedContractEthBalance);
+        assert.strictEqual(contractEthBalance.toString(10), "0");
 
         // Check the remittance amount has been sent to the broker eth balance
         const brokerEthBalance = toBN(await getBalance(broker));
         const cost = await getGasCost(txObj);
-        const expectedBrokerEthBalance = initBrokerEthBalance.add(toBN(2)).sub(toBN(cost)).toString(10);
+        const expectedBrokerEthBalance = initBrokerEthBalance.add(toBN(2)).sub(cost).toString(10);
         assert.equal(brokerEthBalance.toString(10), expectedBrokerEthBalance);
 
     });
@@ -117,7 +118,6 @@ contract('Remittance', async accounts => {
 
         //Create a remittance with an expired date
         await remittance.create(hash, broker, expiryDate, {from: funder, value: 2});
-        const initContractEthBalance = toBN(await getBalance(remittance.address));
         const initFunderEthBalance = toBN(await getBalance(funder));
         await timeMachine.advanceTimeAndBlock(day24hourinSecs);
 
@@ -135,13 +135,12 @@ contract('Remittance', async accounts => {
 
         // Check the remittance amount has been taken from the contract eth balance
         const contractEthBalance = toBN(await getBalance(remittance.address));
-        const expectedContractEthBalance = initContractEthBalance.sub(toBN(2)).toString(10);
-        assert.strictEqual(contractEthBalance.toString(10), expectedContractEthBalance);
+        assert.strictEqual(contractEthBalance.toString(10), "0");
 
         // Check the remittance amount has been sent to the funder eth balance
         const funderEthBalance = toBN(await getBalance(funder));
         const cost = await getGasCost(txObj);
-        const expectedFunderEthBalance = initFunderEthBalance.add(toBN(2)).sub(toBN(cost)).toString(10);
+        const expectedFunderEthBalance = initFunderEthBalance.add(toBN(2)).sub(cost).toString(10);
         assert.strictEqual(funderEthBalance.toString(10), expectedFunderEthBalance);
 
     });
