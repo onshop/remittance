@@ -57,7 +57,7 @@ contract Remittance is Ownable, Pausable {
         require(expiryDate >= block.timestamp + (24 * 60 * 60) - 1500, "Expiry less than 24h ahead");
         checkEmptyHash(passwordBrokerHash);
 
-        bytes32 rehash = keccak256(abi.encodePacked(passwordBrokerHash, address(this)));
+        bytes32 rehash = rehash(passwordBrokerHash);
 
         RemittanceInstance storage remittanceInstance = remittances[rehash];
 
@@ -76,8 +76,7 @@ contract Remittance is Ownable, Pausable {
     // The broker sends the recipient's password to release the funds
     function release(bytes32 password) external whenNotPaused returns(bool success) {
 
-        bytes32 passwordBrokerHash = hashPasswordBroker(password, address(msg.sender));
-        bytes32 rehash = keccak256(abi.encodePacked(passwordBrokerHash, address(this)));
+        bytes32 rehash = rehash(hashPasswordBroker(password, address(msg.sender)));
 
         //Retrieve remittance
         RemittanceInstance storage remittanceInstance = remittances[rehash];
@@ -101,7 +100,7 @@ contract Remittance is Ownable, Pausable {
     function reclaim(bytes32 passwordBrokerHash) external whenNotPaused returns(bool success) {
 
         checkEmptyHash(passwordBrokerHash);
-        bytes32 rehash = keccak256(abi.encodePacked(passwordBrokerHash, address(this)));
+        bytes32 rehash = rehash(passwordBrokerHash);
 
         //Retrieve remittance
         RemittanceInstance storage remittanceInstance = remittances[rehash];
@@ -128,6 +127,10 @@ contract Remittance is Ownable, Pausable {
         require(broker != address(0), "Address cannot be zero");
 
         return keccak256(abi.encodePacked(password, broker));
+    }
+
+    function rehash(bytes32 passwordBrokerHash) internal returns(bytes32) {
+        return keccak256(abi.encodePacked(passwordBrokerHash, address(this)));
     }
 
     function checkEmptyHash(bytes32 hash) internal pure returns(bool) {
