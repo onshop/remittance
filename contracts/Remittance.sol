@@ -20,6 +20,7 @@ contract Remittance is Ownable, Pausable {
 
     event RemittanceFundsCreated(
         bytes32 indexed hash,
+        bytes32 passwordBrokerHash,
         address indexed funder,
         address indexed broker,
         uint256 amount,
@@ -28,12 +29,14 @@ contract Remittance is Ownable, Pausable {
 
     event RemittanceFundsReleased(
         bytes32 indexed hash,
+        bytes32 indexed password,
         address indexed broker,
         uint256 amount
     );
 
     event RemittanceFundsReclaimed(
         bytes32 indexed hash,
+        bytes32 indexed passwordBrokerHash,
         address indexed funder,
         uint256 amount
     );
@@ -54,7 +57,9 @@ contract Remittance is Ownable, Pausable {
         require(expiryDate >= block.timestamp + (24 * 60 * 60) - 1500, "Expiry less than 24h ahead");
         checkEmptyHash(passwordBrokerHash);
 
-        RemittanceInstance storage remittanceInstance = remittances[passwordBrokerHash];
+        bytes32 rehash = keccak256(abi.encodePacked(passwordBrokerHash, address(this)));
+
+        RemittanceInstance storage remittanceInstance = remittances[rehash];
 
         // .funder must be empty otherwise the key is already in use
         require(remittanceInstance.funder == address(0), "Remittance already exists");
@@ -63,7 +68,7 @@ contract Remittance is Ownable, Pausable {
         remittanceInstance.fundsOwed = msg.value;
         remittanceInstance.expiryDate = expiryDate;
 
-        emit RemittanceFundsCreated(passwordBrokerHash, msg.sender, broker, msg.value, expiryDate);
+        emit RemittanceFundsCreated(rehash, passwordBrokerHash, msg.sender, broker, msg.value, expiryDate);
 
         return true;
     }
@@ -72,9 +77,10 @@ contract Remittance is Ownable, Pausable {
     function release(bytes32 password) external whenNotPaused returns(bool success) {
 
         bytes32 passwordBrokerHash = hashPasswordBroker(password, address(msg.sender));
+        bytes32 rehash = keccak256(abi.encodePacked(passwordBrokerHash, address(this)));
 
         //Retrieve remittance
-        RemittanceInstance storage remittanceInstance = remittances[passwordBrokerHash];
+        RemittanceInstance storage remittanceInstance = remittances[rehash];
 
         uint256 fundsOwed = remittanceInstance.fundsOwed;
 
@@ -85,7 +91,7 @@ contract Remittance is Ownable, Pausable {
         remittanceInstance.fundsOwed = 0;
         remittanceInstance.expiryDate = 0;
 
-        emit RemittanceFundsReleased(passwordBrokerHash, msg.sender, fundsOwed);
+        emit RemittanceFundsReleased(rehash, password, msg.sender, fundsOwed);
 
         (success, ) = msg.sender.call{value: fundsOwed}("");
         require(success, "Transfer failed");
@@ -95,9 +101,10 @@ contract Remittance is Ownable, Pausable {
     function reclaim(bytes32 passwordBrokerHash) external whenNotPaused returns(bool success) {
 
         checkEmptyHash(passwordBrokerHash);
+        bytes32 rehash = keccak256(abi.encodePacked(passwordBrokerHash, address(this)));
 
         //Retrieve remittance
-        RemittanceInstance storage remittanceInstance = remittances[passwordBrokerHash];
+        RemittanceInstance storage remittanceInstance = remittances[rehash];
 
         uint256 fundsOwed = remittanceInstance.fundsOwed;
 
@@ -109,7 +116,7 @@ contract Remittance is Ownable, Pausable {
         remittanceInstance.fundsOwed = 0;
         remittanceInstance.expiryDate = 0;
 
-        emit RemittanceFundsReclaimed(passwordBrokerHash, msg.sender, fundsOwed);
+        emit RemittanceFundsReclaimed(rehash, passwordBrokerHash, msg.sender, fundsOwed);
 
         (success, ) = msg.sender.call{value: fundsOwed}("");
         require(success, "Transfer failed");
