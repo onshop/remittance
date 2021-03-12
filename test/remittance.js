@@ -147,17 +147,54 @@ contract('Remittance', async accounts => {
 
     });
 
-    // it("The password and broker combination cannot be reused in independent contracts ", async () => {
-    //     const reHashedPassword = await remittance.hashPasswordBroker(passwordBytes32, broker);
-    //
-    //     assert.strictEqual(reHashedPassword, hash);
-    // });
+    it("Password cannot be reused to release in a second contract using the same creation hash", async () => {
+
+        // Creating by reusing the original contract's hash seeded with the original password and first contract's address.
+        // Releasing with the original password is unsuccessful
+        let expiryDate = futureTimeStamp();
+        const remittance2 = await Remittance.new({from: funder})
+        await remittance2.create(hash, broker, expiryDate, {from: funder, value: 2});
+
+        await truffleAssert.reverts(
+            remittance2.release(passwordBytes32, {from: broker}),
+            noFundsAvailableMsg
+        );
+
+        const result = await truffleAssert.createTransactionResult(remittance2, remittance2.transactionHash);
+        await truffleAssert.eventNotEmitted(
+            result
+        );
+
+        // Creating by using a new hash seeded with original password and the new contract's address.
+        // Releasing with the original password is successful.
+        // However this cannot be deduced from the transactions of the first contract.
+        expiryDate = futureTimeStamp();
+        const hash2 = await soliditySha3(passwordBytes32, broker, remittance2.address);
+        await remittance2.create(hash2, broker, expiryDate, {from: funder, value: 2});
+        txObj = await remittance2.release(passwordBytes32, {from: broker})
+
+        truffleAssert.eventEmitted(txObj, 'RemittanceFundsReleased');
+    });
+
 
     it("Call public password hash and broker rehashing function", async () => {
         const reHashedPassword = await remittance.hashPasswordBroker(passwordBytes32, broker);
 
         assert.strictEqual(reHashedPassword, hash);
     });
+
+    it("Calling the public hashing function on a second contract provides different hashes with the same password", async () => {
+        const originalHash = await remittance.hashPasswordBroker(passwordBytes32, broker);
+
+        const remittance2 = await Remittance.new({from: funder})
+
+        const expectedSecondHash = await soliditySha3(passwordBytes32, broker, remittance2.address);
+        const secondHash = await remittance2.hashPasswordBroker(passwordBytes32, broker);
+        assert.strictEqual(secondHash, expectedSecondHash);
+
+        assert.notStrictEqual(originalHash, secondHash);
+    });
+
 
     it("Creating a remittance reverts using a zero length bytes32 or hash value", async () => {
 
