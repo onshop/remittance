@@ -183,7 +183,7 @@ contract('Remittance', async accounts => {
         assert.strictEqual(reHashedPassword, hash);
     });
 
-    it("Calling the public hashing function on a second contract provides different hashes with the same password", async () => {
+    it("Calling the public hashing function on a second contract provides different hashes with the same password and broker", async () => {
         const originalHash = await remittance.hashPasswordBroker(passwordBytes32, broker);
 
         const remittance2 = await Remittance.new({from: funder})
