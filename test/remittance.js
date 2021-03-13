@@ -300,19 +300,6 @@ contract('Remittance', async accounts => {
         checkEventNotEmitted();
     });
 
-    it("Releasing funds reverts when the remittance has expired", async () => {
-
-        const expiryDate = futureTimeStamp();
-        await remittance.create(hash, broker, expiryDate, {from: funder, value: 2});
-        await timeMachine.advanceTimeAndBlock(day24hourinSecs + 1);
-
-        await truffleAssert.reverts(
-            remittance.release(passwordBytes32, {from: broker}),
-            "Remittance has expired"
-        );
-        checkEventNotEmitted();
-    });
-
     it("Reclaiming funds reverts when using a zero length hash", async () => {
 
         const expiryDate = futureTimeStamp();
@@ -321,7 +308,7 @@ contract('Remittance', async accounts => {
 
         await truffleAssert.reverts(
             remittance.reclaim(emptySha3Hash, {from: funder}),
-            emptyHashErrorMsg
+            noFundsAvailableMsg
         );
         checkEventNotEmitted();
 

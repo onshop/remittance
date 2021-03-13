@@ -12,6 +12,9 @@ contract Remittance is Ownable, Pausable {
 
     mapping(bytes32 => RemittanceInstance) public remittances;
 
+    // A 15 min margin has been added to allow for any lag
+    uint constant minReleaseWindow = 24 * 60 * 60 - 900;
+
     struct RemittanceInstance {
         address funder;
         uint256 fundsOwed;
@@ -51,8 +54,7 @@ contract Remittance is Ownable, Pausable {
         require(msg.value > 0, "Amount must be greater than 0");
         require(broker != address(0), "Address cannot be zero");
 
-        // A 15 min margin has been added to allow for any lag
-        require(expiryDate >= block.timestamp + (24 * 60 * 60) - 1500, "Expiry less than 24h ahead");
+        require(expiryDate >= block.timestamp + minReleaseWindow, "Expiry less than 24h ahead");
         checkEmptyHash(passwordBrokerHash);
 
         RemittanceInstance storage remittanceInstance = remittances[passwordBrokerHash];
@@ -80,7 +82,6 @@ contract Remittance is Ownable, Pausable {
         uint256 fundsOwed = remittanceInstance.fundsOwed;
 
         require(fundsOwed > 0, "No funds available");
-        require(block.timestamp < remittanceInstance.expiryDate, "Remittance has expired");
 
         // Indicate remittance has been collected
         remittanceInstance.fundsOwed = 0;
@@ -94,8 +95,6 @@ contract Remittance is Ownable, Pausable {
 
     // Funder can retrieve funds if not claimed by the expiry date
     function reclaim(bytes32 passwordBrokerHash) external whenNotPaused returns(bool success) {
-
-        checkEmptyHash(passwordBrokerHash);
 
         //Retrieve remittance
         RemittanceInstance storage remittanceInstance = remittances[passwordBrokerHash];
