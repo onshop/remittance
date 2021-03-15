@@ -271,7 +271,6 @@ contract('Remittance', async accounts => {
             emptyPasswordErrorMsg
         );
         checkEventNotEmitted();
-
     });
 
     it("Releasing funds reverts when hash is invalid", async () => {
