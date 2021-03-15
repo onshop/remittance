@@ -24,23 +24,23 @@ contract Remittance is Ownable, Pausable {
     }
 
     event RemittanceFundsCreated(
-        bytes32 indexed hash,
         address indexed funder,
-        address indexed broker,
         uint256 amount,
+        bytes32 indexed hash,
+        address indexed broker,
         uint256 expiryDate
     );
 
     event RemittanceFundsReleased(
-        bytes32 indexed hash,
-        bytes32 indexed password,
         address indexed broker,
+        bytes32 indexed password,
+        bytes32 indexed hash,
         uint256 amount
     );
 
     event RemittanceFundsReclaimed(
-        bytes32 indexed hash,
         address indexed funder,
+        bytes32 indexed hash,
         uint256 amount
     );
 
@@ -68,7 +68,7 @@ contract Remittance is Ownable, Pausable {
         remittanceInstance.fundsOwed = msg.value;
         remittanceInstance.expiryDate = expiryDate;
 
-        emit RemittanceFundsCreated(passwordBrokerHash, msg.sender, broker, msg.value, expiryDate);
+        emit RemittanceFundsCreated(msg.sender, msg.value, passwordBrokerHash, broker,  expiryDate);
 
         return true;
     }
@@ -89,7 +89,7 @@ contract Remittance is Ownable, Pausable {
         remittanceInstance.fundsOwed = 0;
         remittanceInstance.expiryDate = 0;
 
-        emit RemittanceFundsReleased(rehash, password, msg.sender, fundsOwed);
+        emit RemittanceFundsReleased(msg.sender, password, rehash, fundsOwed);
 
         (success, ) = msg.sender.call{value: fundsOwed}("");
         require(success, "Transfer failed");
@@ -111,7 +111,7 @@ contract Remittance is Ownable, Pausable {
         remittanceInstance.fundsOwed = 0;
         remittanceInstance.expiryDate = 0;
 
-        emit RemittanceFundsReclaimed(passwordBrokerHash, msg.sender, fundsOwed);
+        emit RemittanceFundsReclaimed(msg.sender, passwordBrokerHash, fundsOwed);
 
         (success, ) = msg.sender.call{value: fundsOwed}("");
         require(success, "Transfer failed");

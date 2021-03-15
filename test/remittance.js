@@ -63,10 +63,10 @@ contract('Remittance', async accounts => {
 
         await truffleAssert.eventEmitted(txObj, 'RemittanceFundsCreated', (ev) => {
 
-            return  ev.hash === hash &&
-                ev.funder === funder &&
-                ev.broker === broker &&
+            return  ev.funder === funder &&
                 ev.amount.toString(10) === "2" &&
+                ev.hash === hash &&
+                ev.broker === broker &&
                 ev.expiryDate.toString(10) === expiryDate.toString(10);
         }, 'RemittanceFundsCreated event is emitted');
 
@@ -91,9 +91,9 @@ contract('Remittance', async accounts => {
         const txObj = await remittance.release(passwordBytes32, {from: broker});
 
         await truffleAssert.eventEmitted(txObj, 'RemittanceFundsReleased', (ev) => {
-            return  ev.hash === hash &&
+            return  ev.broker === broker &&
                     ev.password === passwordBytes32 &&
-                    ev.broker === broker &&
+                    ev.hash === hash &&
                     ev.amount.toString(10) === "2";
         }, 'RemittanceFundsReleased event is emitted');
 
@@ -126,8 +126,8 @@ contract('Remittance', async accounts => {
         const txObj = await remittance.reclaim(hash, {from: funder});
 
         await truffleAssert.eventEmitted(txObj, 'RemittanceFundsReclaimed', (ev) => {
-            return  ev.hash === hash &&
-                    ev.funder === funder &&
+            return  ev.funder === funder &&
+                    ev.hash === hash &&
                     ev.amount.toString(10) === "2";
         }, 'RemittanceFundsReclaimed event is emitted');
 
