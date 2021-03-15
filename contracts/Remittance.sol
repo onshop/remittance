@@ -13,7 +13,7 @@ contract Remittance is Ownable, Pausable {
     mapping(bytes32 => RemittanceInstance) public remittances;
 
     // A 15 min margin has been added to allow for any lag
-    uint constant minReleaseWindow = 24 * 60 * 60 - 900;
+    uint constant minReleaseWindow = 15 minutes;
 
     struct RemittanceInstance {
         address funder;
