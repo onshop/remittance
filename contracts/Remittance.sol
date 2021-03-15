@@ -15,6 +15,8 @@ contract Remittance is Ownable, Pausable {
     // A 15 min margin has been added to allow for any lag
     uint constant minReleaseWindow = 15 minutes;
 
+    address private constant NULL_ADDRESS = address(0);
+
     struct RemittanceInstance {
         address funder;
         uint256 fundsOwed;
@@ -52,7 +54,7 @@ contract Remittance is Ownable, Pausable {
     {
         require(broker != msg.sender, "Caller cannot be the broker");
         require(msg.value > 0, "Amount must be greater than 0");
-        require(broker != address(0), "Address cannot be zero");
+        require(broker != NULL_ADDRESS, "Address cannot be zero");
 
         require(expiryDate >= block.timestamp + minReleaseWindow, "Expiry less than 24h ahead");
         checkEmptyHash(passwordBrokerHash);
@@ -60,7 +62,7 @@ contract Remittance is Ownable, Pausable {
         RemittanceInstance storage remittanceInstance = remittances[passwordBrokerHash];
 
         // .funder must be empty otherwise the key is already in use
-        require(remittanceInstance.funder == address(0), "Remittance already exists");
+        require(remittanceInstance.funder == NULL_ADDRESS, "Remittance already exists");
 
         remittanceInstance.funder = msg.sender;
         remittanceInstance.fundsOwed = msg.value;
@@ -118,7 +120,7 @@ contract Remittance is Ownable, Pausable {
     // Utility function
     function hashPasswordBroker(bytes32 password, address broker) public view returns(bytes32) {
         require(password != bytes32(0), "Password cannot be empty");
-        require(broker != address(0), "Address cannot be zero");
+        require(broker != NULL_ADDRESS, "Address cannot be zero");
 
         return keccak256(abi.encodePacked(password, broker, address(this)));
     }
